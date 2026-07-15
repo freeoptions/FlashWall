@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">FlashWall</string>
+    <string name="wallpaper_label">FlashWall (自动换壁纸)</string>
+    <string name="shortcut_mark_label">标记当前</string>
+    <string name="shortcut_mark_long_label">标记当前正在显示的壁纸</string>
+</resources>
