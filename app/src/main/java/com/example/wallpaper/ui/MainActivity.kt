@@ -52,6 +52,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -149,26 +150,47 @@ fun MainApp() {
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
             NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface,
-                tonalElevation = 3.dp
+                containerColor = MaterialTheme.colorScheme.background.copy(alpha = 0.96f),
+                tonalElevation = 0.dp
             ) {
                 NavigationBarItem(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
                     icon = { Icon(Icons.Default.List, contentDescription = "文件夹") },
-                    label = { Text("文件夹") }
+                    label = { Text("文件夹") },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                        selectedTextColor = MaterialTheme.colorScheme.onBackground,
+                        indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 )
                 NavigationBarItem(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
                     icon = { Icon(Icons.Default.FavoriteBorder, contentDescription = "标记中心") },
-                    label = { Text("标记") }
+                    label = { Text("标记") },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                        selectedTextColor = MaterialTheme.colorScheme.onBackground,
+                        indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 )
                 NavigationBarItem(
                     selected = selectedTab == 2,
                     onClick = { selectedTab = 2 },
                     icon = { Icon(Icons.Default.Settings, contentDescription = "设置") },
-                    label = { Text("设置") }
+                    label = { Text("设置") },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                        selectedTextColor = MaterialTheme.colorScheme.onBackground,
+                        indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 )
             }
         }
@@ -195,16 +217,62 @@ private fun ScreenHeader(
     ) {
         Text(
             text = title,
-            style = MaterialTheme.typography.headlineSmall,
+            style = MaterialTheme.typography.headlineLarge,
             color = MaterialTheme.colorScheme.onBackground
         )
         if (subtitle != null) {
             Text(
                 text = subtitle,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
+}
+
+@Composable
+private fun SettingsSwitchRow(
+    icon: ImageVector,
+    title: String,
+    summary: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 72.dp)
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Surface(
+            modifier = Modifier.size(40.dp),
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                summary,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 
@@ -882,7 +950,7 @@ fun FolderBrowserDialog(
                 modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth(),
                 shape = RoundedCornerShape(32.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.78f)
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.62f)
                 ),
                 border = BorderStroke(
                     1.dp,
@@ -897,21 +965,22 @@ fun FolderBrowserDialog(
                     ) {
                         Surface(
                             modifier = Modifier.size(48.dp),
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primary
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     Icons.Default.Refresh,
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onPrimary
+                                    modifier = Modifier.size(24.dp),
+                                    tint = MaterialTheme.colorScheme.primary
                                 )
                             }
                         }
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 "自动播放",
-                                style = MaterialTheme.typography.titleLarge,
+                                style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                             Text(
@@ -920,11 +989,17 @@ fun FolderBrowserDialog(
                                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f)
                             )
                         }
-                        Text(
-                            "${intervalSeconds.toInt()} 秒",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+                        ) {
+                            Text(
+                                "${intervalSeconds.toInt()} 秒",
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
 
                     Spacer(Modifier.height(18.dp))
@@ -964,14 +1039,14 @@ fun FolderBrowserDialog(
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.Center
                     ) {
                         IconButton(onClick = {
                             intervalSeconds = (intervalSeconds - 1f).coerceAtLeast(4f)
                             prefs.edit().putInt("interval", intervalSeconds.toInt()).apply()
                         }) { Icon(Icons.Default.KeyboardArrowLeft, "减1秒") }
 
-                        TextField(
+                        OutlinedTextField(
                             value = intervalSeconds.toInt().toString(),
                             onValueChange = {
                                 val newValue = it.toIntOrNull()
@@ -980,16 +1055,18 @@ fun FolderBrowserDialog(
                                     prefs.edit().putInt("interval", intervalSeconds.toInt()).apply()
                                 }
                             },
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.width(132.dp),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true,
                             label = { Text("精确设置") },
-                            trailingIcon = { Text("秒") },
+                            trailingIcon = {
+                                Text(
+                                    "秒",
+                                    modifier = Modifier.padding(end = 12.dp),
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            },
                             shape = RoundedCornerShape(18.dp),
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
-                                unfocusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.58f)
-                            ),
                             textStyle = MaterialTheme.typography.bodyLarge
                         )
 
@@ -1001,140 +1078,140 @@ fun FolderBrowserDialog(
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(24.dp))
+            Text(
+                "播放行为",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(horizontal = 20.dp)
+            )
+            Spacer(Modifier.height(10.dp))
 
             Card(
                 modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth(),
-                shape = RoundedCornerShape(28.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+                ),
+                border = BorderStroke(
+                    1.dp,
+                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)
+                )
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("包含子文件夹", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                "添加文件夹时是否扫描其子目录",
-                                style = MaterialTheme.typography.bodySmall
-                            )
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                    SettingsSwitchRow(
+                        icon = Icons.Default.List,
+                        title = "包含子文件夹",
+                        summary = "添加文件夹时是否扫描其子目录",
+                        checked = includeSubfolders,
+                        onCheckedChange = {
+                            includeSubfolders = it
+                            prefs.edit().putBoolean("include_subfolders", it).apply()
                         }
-                        Switch(
-                            checked = includeSubfolders,
-                            onCheckedChange = {
-                                includeSubfolders = it; prefs.edit()
-                                .putBoolean("include_subfolders", it).apply()
-                            })
-                    }
+                    )
                     Divider(
                         modifier = Modifier.padding(vertical = 12.dp),
                         thickness = 0.5.dp,
                         color = MaterialTheme.colorScheme.outlineVariant
                     )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("亮屏/解锁时更换", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                "每次打开屏幕自动换下一张",
-                                style = MaterialTheme.typography.bodySmall
-                            )
+                    SettingsSwitchRow(
+                        icon = Icons.Default.PlayArrow,
+                        title = "亮屏/解锁时更换",
+                        summary = "每次打开屏幕自动换下一张",
+                        checked = switchOnScreenOn,
+                        onCheckedChange = {
+                            switchOnScreenOn = it
+                            prefs.edit().putBoolean("switch_on_screen_on", it).apply()
                         }
-                        Switch(
-                            checked = switchOnScreenOn,
-                            onCheckedChange = {
-                                switchOnScreenOn = it; prefs.edit()
-                                .putBoolean("switch_on_screen_on", it).apply()
-                            })
-                    }
+                    )
                     Divider(
                         modifier = Modifier.padding(vertical = 12.dp),
                         thickness = 0.5.dp,
                         color = MaterialTheme.colorScheme.outlineVariant
                     )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("多任务页面隐藏 App", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                "开启后自动把当前界面移出多任务",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-                        Switch(checked = hideFromRecents, onCheckedChange = {
+                    SettingsSwitchRow(
+                        icon = Icons.Default.Settings,
+                        title = "多任务页面隐藏 App",
+                        summary = "开启后自动把当前界面移出多任务",
+                        checked = hideFromRecents,
+                        onCheckedChange = {
                             hideFromRecents = it
                             prefs.edit().putBoolean(PREF_HIDE_FROM_RECENTS, it).apply()
                             if (it) {
                                 removeCurrentTaskFromRecents(context)
                             }
-                        })
-                    }
+                        }
+                    )
                     Divider(
                         modifier = Modifier.padding(vertical = 12.dp),
                         thickness = 0.5.dp,
                         color = MaterialTheme.colorScheme.outlineVariant
                     )
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Text("启动轮播图标", style = MaterialTheme.typography.titleMedium)
-                        Spacer(Modifier.height(8.dp))
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp)
+                    ) {
                         Row(
+                            modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             Surface(
-                                modifier = Modifier.size(56.dp).clip(CircleShape),
-                                color = MaterialTheme.colorScheme.surfaceVariant
+                                modifier = Modifier.size(52.dp),
+                                shape = RoundedCornerShape(18.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer
                             ) {
                                 if (launcherIconUri != null) {
                                     AsyncImage(
                                         model = launcherIconUri,
                                         contentDescription = null,
-                                        modifier = Modifier.fillMaxSize(),
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .clip(RoundedCornerShape(18.dp)),
                                         contentScale = ContentScale.Crop
                                     )
                                 } else {
-                                    Icon(
-                                        imageVector = Icons.Default.PlayArrow,
-                                        contentDescription = null,
-                                        modifier = Modifier.padding(8.dp),
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                            }
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Button(
-                                    onClick = { iconPickerLauncher.launch(arrayOf("image/*")) },
-                                    contentPadding = PaddingValues(
-                                        horizontal = 12.dp,
-                                        vertical = 4.dp
-                                    )
-                                ) { Text("选择图片", style = MaterialTheme.typography.labelMedium) }
-                                if (launcherIconUri != null) {
-                                    TextButton(
-                                        onClick = {
-                                            launcherIconUri = null; prefs.edit()
-                                            .remove("launcher_icon_uri").apply()
-                                        },
-                                        contentPadding = PaddingValues(
-                                            horizontal = 12.dp,
-                                            vertical = 4.dp
-                                        )
-                                    ) {
-                                        Text(
-                                            "恢复默认",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.error
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Default.PlayArrow,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(28.dp),
+                                            tint = MaterialTheme.colorScheme.primary
                                         )
                                     }
                                 }
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("启动轮播图标", style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    if (launcherIconUri != null) "已使用自定义图片" else "使用默认播放图标",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            OutlinedButton(
+                                onClick = { iconPickerLauncher.launch(arrayOf("image/*")) },
+                                shape = RoundedCornerShape(14.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp)
+                            ) {
+                                Text("更换", style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                        if (launcherIconUri != null) {
+                            TextButton(
+                                onClick = {
+                                    launcherIconUri = null
+                                    prefs.edit().remove("launcher_icon_uri").apply()
+                                },
+                                modifier = Modifier.align(Alignment.End),
+                                contentPadding = PaddingValues(horizontal = 8.dp)
+                            ) {
+                                Text(
+                                    "恢复默认",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.error
+                                )
                             }
                         }
                     }
@@ -1193,26 +1270,50 @@ fun FolderBrowserDialog(
             Card(
                 modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth(),
                 shape = RoundedCornerShape(28.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+                ),
+                border = BorderStroke(
+                    1.dp,
+                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)
+                )
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp)) {
                     Text("选中边框颜色", style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.height(12.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "长按标记图片时使用的选中提示色",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         listOf(
                             "yellow" to Color(0xFFFFEB3B),
                             "red" to Color(0xFFFF5252),
                             "blue" to Color(0xFF2196F3),
                             "pink" to Color(0xFFFF4081)
                         ).forEach { (key, color) ->
-                            Box(
-                                modifier = Modifier.size(40.dp)
-                                    .background(color, RoundedCornerShape(20.dp)).clickable {
+                            Surface(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clickable {
                                     selectedBorderColorKey = key; prefs.edit()
                                     .putString("selected_border_color", key).apply()
-                                }
-                                    .then(if (selectedBorderColorKey == key) Modifier.padding(2.dp) else Modifier)
-                            )
+                                },
+                                shape = CircleShape,
+                                color = color,
+                                border = BorderStroke(
+                                    if (selectedBorderColorKey == key) 3.dp else 1.dp,
+                                    if (selectedBorderColorKey == key) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.outlineVariant
+                                    }
+                                )
+                            ) { }
                         }
                     }
                 }
