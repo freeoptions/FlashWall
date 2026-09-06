@@ -4,7 +4,6 @@ import android.util.Log
 import android.app.WallpaperManager
 import android.provider.Settings
 import java.io.File
-import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -64,7 +63,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.graphics.drawable.toBitmap
-import androidx.documentfile.provider.DocumentFile
 import coil.compose.AsyncImage
 import coil.ImageLoader
 import coil.request.ImageRequest
@@ -87,7 +85,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme {
+            FlashWallTheme {
                 MainApp()
             }
         }
@@ -147,8 +145,12 @@ fun MainApp() {
     var selectedTab by remember { mutableIntStateOf(0) }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
-            NavigationBar {
+            NavigationBar(
+                containerColor = MaterialTheme.colorScheme.surface,
+                tonalElevation = 3.dp
+            ) {
                 NavigationBarItem(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
@@ -158,7 +160,7 @@ fun MainApp() {
                 NavigationBarItem(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
-                    icon = { Icon(Icons.Default.Favorite, contentDescription = "标记中心") },
+                    icon = { Icon(Icons.Default.FavoriteBorder, contentDescription = "标记中心") },
                     label = { Text("标记") }
                 )
                 NavigationBarItem(
@@ -176,6 +178,31 @@ fun MainApp() {
                 1 -> MarkedGalleryScreen()
                 2 -> SettingsScreen()
             }
+        }
+    }
+}
+
+@Composable
+private fun ScreenHeader(
+    title: String,
+    subtitle: String? = null,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier.padding(horizontal = 20.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+        if (subtitle != null) {
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -216,25 +243,69 @@ fun FolderListScreen() {
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Column(modifier = Modifier.fillMaxSize()) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp)
+        ) {
+            ScreenHeader(
+                title = "文件夹",
+                subtitle = "管理壁纸来源，决定轮播内容"
+            )
             Card(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                shape = RoundedCornerShape(28.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text("FlashWall 标记中心: 已标记 $totalMarked 张图片", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        "当前模式: 系统毫秒级索引 (无需同步)",
-                        style = MaterialTheme.typography.bodySmall,
+                Row(
+                    modifier = Modifier.padding(20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Surface(
+                        modifier = Modifier.size(48.dp),
+                        shape = CircleShape,
                         color = MaterialTheme.colorScheme.primary
-                    )
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Default.Favorite,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text("标记中心", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "$totalMarked 张图片已标记",
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Text(
+                            "系统毫秒级索引 · 无需同步",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f)
+                        )
+                    }
                 }
             }
 
             Spacer(Modifier.height(8.dp))
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 Button(
                     onClick = {
                         if (android.os.Build.VERSION.SDK_INT >= 30 && !Environment.isExternalStorageManager()) {
@@ -243,7 +314,9 @@ fun FolderListScreen() {
                             showFolderBrowser = true
                         }
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    contentPadding = PaddingValues(vertical = 14.dp)
                 ) {
                     Icon(Icons.Default.Add, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
@@ -251,9 +324,16 @@ fun FolderListScreen() {
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Text("已选文件夹:", style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+            Spacer(Modifier.height(20.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    "已选文件夹",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f)
+                )
                 if (folders.isNotEmpty()) {
                     val allSelected = folders.all { it.isSelected }
                     TextButton(onClick = {
@@ -268,786 +348,1275 @@ fun FolderListScreen() {
             }
 
             LazyColumn(modifier = Modifier.weight(1f)) {
-                lazyItemsIndexed(folders) { index, folder ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp)
-                            .background(MaterialTheme.colorScheme.surface)
-                    ) {
-                        Checkbox(
-                            checked = folder.isSelected,
-                            onCheckedChange = {
-                                scope.launch {
-                                    db.wallpaperDao().insertFolder(folder.copy(isSelected = it))
-                                    prefs.edit().putBoolean("pending_refresh_on_visible", true).apply()
+                if (folders.isEmpty()) {
+                    item {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 12.dp),
+                            shape = RoundedCornerShape(24.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(20.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.List,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                    Text(
+                                        "还没有文件夹",
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                    Text(
+                                        "添加一个目录，FlashWall 就能开始轮播",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
                             }
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(folder.name, color = MaterialTheme.colorScheme.onSurface)
                         }
+                    }
+                } else {
+                    lazyItemsIndexed(folders) { index, folder ->
+                        Card(
+                            shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface
+                            ),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = folder.isSelected,
+                                    onCheckedChange = {
+                                        scope.launch {
+                                            db.wallpaperDao()
+                                                .insertFolder(folder.copy(isSelected = it))
+                                            prefs.edit()
+                                                .putBoolean("pending_refresh_on_visible", true)
+                                                .apply()
+                                        }
+                                    }
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(folder.name, color = MaterialTheme.colorScheme.onSurface)
+                                    Text(
+                                        "轮播来源",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
 
-                        IconButton(onClick = {
-                            if (index > 0) {
-                                scope.launch {
-                                    val list = folders.toMutableList()
-                                    val item = list.removeAt(index)
-                                    list.add(index - 1, item)
-                                    val updated = list.mapIndexed { i, f -> f.copy(position = i) }
-                                    db.wallpaperDao().insertFolders(updated)
+                                IconButton(onClick = {
+                                    if (index > 0) {
+                                        scope.launch {
+                                            val list = folders.toMutableList()
+                                            val item = list.removeAt(index)
+                                            list.add(index - 1, item)
+                                            val updated =
+                                                list.mapIndexed { i, f -> f.copy(position = i) }
+                                            db.wallpaperDao().insertFolders(updated)
+                                        }
+                                    }
+                                }, enabled = index > 0) {
+                                    Icon(Icons.Default.KeyboardArrowUp, contentDescription = "上移")
+                                }
+
+                                IconButton(onClick = {
+                                    if (index < folders.size - 1) {
+                                        scope.launch {
+                                            val list = folders.toMutableList()
+                                            val item = list.removeAt(index)
+                                            list.add(index + 1, item)
+                                            val updated =
+                                                list.mapIndexed { i, f -> f.copy(position = i) }
+                                            db.wallpaperDao().insertFolders(updated)
+                                        }
+                                    }
+                                }, enabled = index < folders.size - 1) {
+                                    Icon(
+                                        Icons.Default.KeyboardArrowDown,
+                                        contentDescription = "下移"
+                                    )
+                                }
+
+                                IconButton(onClick = { folderToDelete = folder }) {
+                                    Icon(
+                                        Icons.Default.Delete,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
                                 }
                             }
-                        }, enabled = index > 0) {
-                            Icon(Icons.Default.KeyboardArrowUp, contentDescription = "上移")
-                        }
-
-                        IconButton(onClick = {
-                            if (index < folders.size - 1) {
-                                scope.launch {
-                                    val list = folders.toMutableList()
-                                    val item = list.removeAt(index)
-                                    list.add(index + 1, item)
-                                    val updated = list.mapIndexed { i, f -> f.copy(position = i) }
-                                    db.wallpaperDao().insertFolders(updated)
-                                }
-                            }
-                        }, enabled = index < folders.size - 1) {
-                            Icon(Icons.Default.KeyboardArrowDown, contentDescription = "下移")
-                        }
-
-                        IconButton(onClick = { folderToDelete = folder }) {
-                            Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
                         }
                     }
                 }
+                }
+
+                Spacer(Modifier.height(88.dp))
             }
 
-            Spacer(Modifier.height(88.dp))
-        }
-
-        if (folderToDelete != null) {
-            AlertDialog(
-                onDismissRequest = { folderToDelete = null },
-                title = { Text("确认移除") },
-                text = { Text("确定要从库中移除文件夹 [${folderToDelete?.name}] 吗？\n(这不会删除您的物理文件)") },
-                confirmButton = {
-                    TextButton(onClick = {
-                        folderToDelete?.let { folder ->
-                            scope.launch {
-                                db.wallpaperDao().deleteFolderWithWallpapers(folder.id)
-                                prefs.edit().putBoolean("pending_refresh_on_visible", true).apply()
+            if (folderToDelete != null) {
+                AlertDialog(
+                    onDismissRequest = { folderToDelete = null },
+                    title = { Text("确认移除") },
+                    text = { Text("确定要从库中移除文件夹 [${folderToDelete?.name}] 吗？\n(这不会删除您的物理文件)") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            folderToDelete?.let { folder ->
+                                scope.launch {
+                                    db.wallpaperDao().deleteFolderWithWallpapers(folder.id)
+                                    prefs.edit().putBoolean("pending_refresh_on_visible", true)
+                                        .apply()
+                                }
                             }
+                            folderToDelete = null
+                        }) {
+                            Text("确定", color = MaterialTheme.colorScheme.error)
                         }
-                        folderToDelete = null
-                    }) {
-                        Text("确定", color = MaterialTheme.colorScheme.error)
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { folderToDelete = null }) {
+                            Text("取消")
+                        }
                     }
-                },
-                dismissButton = {
-                    TextButton(onClick = { folderToDelete = null }) {
-                        Text("取消")
-                    }
-                }
-            )
-        }
+                )
+            }
 
-        Surface(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 12.dp)
-                .size(72.dp)
-                .clip(CircleShape)
-                .clickable {
+            FloatingActionButton(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 12.dp),
+                shape = CircleShape,
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                elevation = FloatingActionButtonDefaults.elevation(
+                    defaultElevation = 4.dp,
+                    pressedElevation = 8.dp
+                ),
+                onClick = {
                     openLiveWallpaperSettings(context)
-                },
-            color = MaterialTheme.colorScheme.primary,
-            tonalElevation = 6.dp,
-            shadowElevation = 6.dp
-        ) {
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                }
+            ) {
                 if (launcherIconUri != null) {
                     AsyncImage(
                         model = launcherIconUri,
                         contentDescription = "FlashWall 启动",
-                        modifier = Modifier.fillMaxSize().clip(CircleShape),
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(CircleShape),
                         contentScale = ContentScale.Crop
                     )
                 } else {
                     Icon(
                         imageVector = Icons.Default.PlayArrow,
                         contentDescription = "FlashWall 启动",
-                        modifier = Modifier.size(40.dp),
-                        tint = MaterialTheme.colorScheme.onPrimary
+                        modifier = Modifier.size(28.dp)
                     )
                 }
             }
-        }
 
-        if (showFolderBrowser) {
-            FolderBrowserDialog(
-                onDismiss = { showFolderBrowser = false },
-                onSelect = onFolderSelected
-            )
+            if (showFolderBrowser) {
+                FolderBrowserDialog(
+                    onDismiss = { showFolderBrowser = false },
+                    onSelect = onFolderSelected
+                )
+            }
         }
     }
-}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FolderBrowserDialog(
-    onDismiss: () -> Unit,
-    onSelect: (String) -> Unit
-) {
-    var currentPath by remember { mutableStateOf(Environment.getExternalStorageDirectory().absolutePath) }
-    val currentFile = File(currentPath)
-    val files = remember(currentPath) {
-        currentFile.listFiles { file -> file.isDirectory && !file.name.startsWith(".") }
-            ?.sortedBy { it.name.lowercase() } ?: emptyList()
-    }
-
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        onDismiss: () -> Unit,
+        onSelect: (String) -> Unit
     ) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.surface
-        ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.secondaryContainer)
-                        .padding(16.dp)
-                ) {
-                    Text("选择图像目录", style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.height(8.dp))
-                    Text(currentPath, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                }
+        val context = LocalContext.current
+        var currentPath by remember { mutableStateOf(Environment.getExternalStorageDirectory().absolutePath) }
+        val currentFile = File(currentPath)
+        val files = remember(currentPath) {
+            currentFile.listFiles { file -> file.isDirectory && !file.name.startsWith(".") }
+                ?.sortedBy { it.name.lowercase() } ?: emptyList()
+        }
 
-                LazyColumn(modifier = Modifier.weight(1f)) {
-                    if (currentPath != Environment.getExternalStorageDirectory().absolutePath) {
-                        item {
+        Dialog(
+            onDismissRequest = onDismiss,
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.92f)
+                    .padding(12.dp),
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 6.dp
+            ) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.secondaryContainer)
+                            .padding(horizontal = 20.dp, vertical = 18.dp)
+                    ) {
+                        Text("选择图像目录", style = MaterialTheme.typography.titleLarge)
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            displayableDirectoryPath(context, currentPath) ?: currentPath,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
+
+                    LazyColumn(modifier = Modifier.weight(1f)) {
+                        if (currentPath != Environment.getExternalStorageDirectory().absolutePath) {
+                            item {
+                                ListItem(
+                                    headlineContent = { Text("../ (返回上级)") },
+                                    leadingContent = {
+                                        Icon(
+                                            Icons.Default.KeyboardArrowLeft,
+                                            null
+                                        )
+                                    },
+                                    modifier = Modifier.combinedClickable(onClick = {
+                                        currentFile.parent?.let { currentPath = it }
+                                    })
+                                )
+                            }
+                        }
+
+                        items(files) { file ->
                             ListItem(
-                                headlineContent = { Text("../ (返回上级)") },
-                                leadingContent = { Icon(Icons.Default.KeyboardArrowLeft, null) },
+                                headlineContent = { Text("${file.name}/") },
+                                leadingContent = {
+                                    Icon(
+                                        Icons.Default.Menu,
+                                        null,
+                                        tint = Color(0xFFFFC107)
+                                    )
+                                },
                                 modifier = Modifier.combinedClickable(onClick = {
-                                    currentFile.parent?.let { currentPath = it }
+                                    currentPath = file.absolutePath
                                 })
                             )
                         }
                     }
 
-                    items(files) { file ->
-                        ListItem(
-                            headlineContent = { Text("${file.name}/") },
-                            leadingContent = { Icon(Icons.Default.Menu, null, tint = Color(0xFFFFC107)) },
-                            modifier = Modifier.combinedClickable(onClick = {
-                                currentPath = file.absolutePath
-                            })
-                        )
-                    }
-                }
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
-                        Text("取消")
-                    }
-                    Button(onClick = { onSelect(currentPath) }, modifier = Modifier.weight(1f)) {
-                        Text("选择这里")
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Text("取消")
+                        }
+                        Button(
+                            onClick = { onSelect(currentPath) },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Text("选择这里")
+                        }
                     }
                 }
             }
         }
     }
-}
 
-@Composable
-fun SettingsScreen() {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
+    @Composable
+    fun SettingsScreen() {
+        val context = LocalContext.current
+        val scope = rememberCoroutineScope()
+        val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
 
-    var intervalSeconds by remember { mutableFloatStateOf(prefs.getInt("interval", 10).toFloat()) }
-    var includeSubfolders by remember { mutableStateOf(prefs.getBoolean("include_subfolders", false)) }
-    var switchOnScreenOn by remember { mutableStateOf(prefs.getBoolean("switch_on_screen_on", false)) }
-    var hideFromRecents by remember { mutableStateOf(prefs.getBoolean(PREF_HIDE_FROM_RECENTS, false)) }
-    var selectedBorderColorKey by remember { mutableStateOf(prefs.getString("selected_border_color", "yellow") ?: "yellow") }
-    var launcherIconUri by remember { mutableStateOf(prefs.getString("launcher_icon_uri", null)) }
-    var markedMoveTargetPath by remember { mutableStateOf(prefs.getString(PREF_MARKED_MOVE_TARGET_PATH, null)) }
-    var exportFolderPath by remember { mutableStateOf(prefs.getString("export_folder", null)) }
+        var intervalSeconds by remember {
+            mutableFloatStateOf(
+                prefs.getInt("interval", 10).toFloat()
+            )
+        }
+        var includeSubfolders by remember {
+            mutableStateOf(
+                prefs.getBoolean(
+                    "include_subfolders",
+                    false
+                )
+            )
+        }
+        var switchOnScreenOn by remember {
+            mutableStateOf(
+                prefs.getBoolean(
+                    "switch_on_screen_on",
+                    false
+                )
+            )
+        }
+        var hideFromRecents by remember {
+            mutableStateOf(
+                prefs.getBoolean(
+                    PREF_HIDE_FROM_RECENTS,
+                    false
+                )
+            )
+        }
+        var selectedBorderColorKey by remember {
+            mutableStateOf(
+                prefs.getString(
+                    "selected_border_color",
+                    "yellow"
+                ) ?: "yellow"
+            )
+        }
+        var launcherIconUri by remember {
+            mutableStateOf(
+                prefs.getString(
+                    "launcher_icon_uri",
+                    null
+                )
+            )
+        }
+        var markedMoveTargetPath by remember {
+            mutableStateOf(
+                prefs.getString(
+                    PREF_MARKED_MOVE_TARGET_PATH,
+                    null
+                )
+            )
+        }
+        var exportFolderPath by remember { mutableStateOf(prefs.getString("export_folder", null)) }
+        val readableMarkedMoveTargetPath = remember(markedMoveTargetPath) {
+            displayableDirectoryPath(context, markedMoveTargetPath)
+        }
+        val readableExportFolderPath = remember(exportFolderPath) {
+            displayableDirectoryPath(context, exportFolderPath)
+        }
 
-    val exportLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/json")
-    ) { uri ->
-        uri?.let {
-            scope.launch(Dispatchers.IO) {
+        val exportFolderPickerLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.OpenDocumentTree()
+        ) { uri ->
+            uri?.let {
                 try {
-                    val json = JSONObject().apply {
-                        put("interval", prefs.getInt("interval", 10))
-                        put("include_subfolders", prefs.getBoolean("include_subfolders", false))
-                        put("switch_on_screen_on", prefs.getBoolean("switch_on_screen_on", false))
-                        put(PREF_HIDE_FROM_RECENTS, prefs.getBoolean(PREF_HIDE_FROM_RECENTS, false))
-                        put("selected_border_color", prefs.getString("selected_border_color", "yellow"))
-                        put("launcher_icon_uri", prefs.getString("launcher_icon_uri", null))
-                        put(PREF_MARKED_MOVE_TARGET_PATH, prefs.getString(PREF_MARKED_MOVE_TARGET_PATH, null))
-                        put("export_folder", prefs.getString("export_folder", null))
-                        put("export_time", System.currentTimeMillis())
-                        put("device", android.os.Build.MODEL)
-                    }
-                    context.contentResolver.openOutputStream(it)?.use { out ->
-                        out.write(json.toString(4).toByteArray())
-                    }
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "FlashWall 设置导出成功", Toast.LENGTH_SHORT).show()
-                    }
+                    context.contentResolver.takePersistableUriPermission(
+                        it,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                    )
                 } catch (e: Exception) {
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "导出失败: ${e.message}", Toast.LENGTH_LONG).show()
-                    }
+                    Log.w("SettingsScreen", "无法持久化导出目录授权", e)
                 }
+                exportFolderPath = it.toString()
+                prefs.edit().putString("export_folder", it.toString()).apply()
             }
         }
-    }
 
-    val iconPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        uri?.let {
-            try {
-                context.contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            } catch (e: Exception) {}
-            launcherIconUri = it.toString()
-            prefs.edit().putString("launcher_icon_uri", it.toString()).apply()
-        }
-    }
-
-    val importLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        uri?.let {
-            scope.launch(Dispatchers.IO) {
-                try {
-                    val content = context.contentResolver.openInputStream(it)?.bufferedReader()?.use { r -> r.readText() }
-                    if (content != null) {
-                        val json = JSONObject(content)
-                        prefs.edit().apply {
-                            if (json.has("interval")) putInt("interval", json.getInt("interval"))
-                            if (json.has("include_subfolders")) putBoolean("include_subfolders", json.getBoolean("include_subfolders"))
-                            if (json.has("switch_on_screen_on")) putBoolean("switch_on_screen_on", json.getBoolean("switch_on_screen_on"))
-                            if (json.has(PREF_HIDE_FROM_RECENTS)) putBoolean(PREF_HIDE_FROM_RECENTS, json.getBoolean(PREF_HIDE_FROM_RECENTS))
-                            if (json.has("selected_border_color")) putString("selected_border_color", json.getString("selected_border_color"))
-                            if (json.has("launcher_icon_uri")) putString("launcher_icon_uri", json.optString("launcher_icon_uri").ifEmpty { null })
-                            if (json.has(PREF_MARKED_MOVE_TARGET_PATH)) putString(PREF_MARKED_MOVE_TARGET_PATH, json.optString(PREF_MARKED_MOVE_TARGET_PATH).ifEmpty { null })
-                            if (json.has("export_folder")) putString("export_folder", json.optString("export_folder").ifEmpty { null })
-                            apply()
+        val exportLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.CreateDocument("application/json")
+        ) { uri ->
+            uri?.let {
+                scope.launch(Dispatchers.IO) {
+                    try {
+                        val json = JSONObject().apply {
+                            put("interval", prefs.getInt("interval", 10))
+                            put("include_subfolders", prefs.getBoolean("include_subfolders", false))
+                            put(
+                                "switch_on_screen_on",
+                                prefs.getBoolean("switch_on_screen_on", false)
+                            )
+                            put(
+                                PREF_HIDE_FROM_RECENTS,
+                                prefs.getBoolean(PREF_HIDE_FROM_RECENTS, false)
+                            )
+                            put(
+                                "selected_border_color",
+                                prefs.getString("selected_border_color", "yellow")
+                            )
+                            put("launcher_icon_uri", prefs.getString("launcher_icon_uri", null))
+                            put(
+                                PREF_MARKED_MOVE_TARGET_PATH,
+                                prefs.getString(PREF_MARKED_MOVE_TARGET_PATH, null)
+                            )
+                            put("export_folder", prefs.getString("export_folder", null))
+                            put("export_time", System.currentTimeMillis())
+                            put("device", android.os.Build.MODEL)
+                        }
+                        context.contentResolver.openOutputStream(it)?.use { out ->
+                            out.write(json.toString(4).toByteArray())
                         }
                         withContext(Dispatchers.Main) {
-                            intervalSeconds = prefs.getInt("interval", 10).toFloat()
-                            includeSubfolders = prefs.getBoolean("include_subfolders", false)
-                            switchOnScreenOn = prefs.getBoolean("switch_on_screen_on", false)
-                            hideFromRecents = prefs.getBoolean(PREF_HIDE_FROM_RECENTS, false)
-                            selectedBorderColorKey = prefs.getString("selected_border_color", "yellow") ?: "yellow"
-                            launcherIconUri = prefs.getString("launcher_icon_uri", null)
-                            markedMoveTargetPath = prefs.getString(PREF_MARKED_MOVE_TARGET_PATH, null)
-                            exportFolderPath = prefs.getString("export_folder", null)
-                            Toast.makeText(context, "FlashWall 设置导入成功", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "FlashWall 设置导出成功", Toast.LENGTH_SHORT)
+                                .show()
+                        }
+                    } catch (e: Exception) {
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(context, "导出失败: ${e.message}", Toast.LENGTH_LONG)
+                                .show()
                         }
                     }
+                }
+            }
+        }
+
+        val iconPickerLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.OpenDocument()
+        ) { uri ->
+            uri?.let {
+                try {
+                    context.contentResolver.takePersistableUriPermission(
+                        it,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
                 } catch (e: Exception) {
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "导入失败，请检查文件格式", Toast.LENGTH_LONG).show()
-                    }
                 }
-            }
-        }
-    }
-
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
-        Text("FlashWall 基础设置", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
-        Spacer(Modifier.height(16.dp))
-
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("切换间隔: ${intervalSeconds.toInt()} 秒", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    IconButton(onClick = {
-                        intervalSeconds = (intervalSeconds - 1f).coerceAtLeast(4f)
-                        prefs.edit().putInt("interval", intervalSeconds.toInt()).apply()
-                    }) { Icon(Icons.Default.KeyboardArrowLeft, "减1秒") }
-
-                    TextField(
-                        value = intervalSeconds.toInt().toString(),
-                        onValueChange = {
-                            val newValue = it.toIntOrNull()
-                            if (newValue != null) {
-                                intervalSeconds = newValue.toFloat().coerceIn(4f, 300f)
-                                prefs.edit().putInt("interval", intervalSeconds.toInt()).apply()
-                            }
-                        },
-                        modifier = Modifier.width(80.dp),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        textStyle = MaterialTheme.typography.bodyLarge
-                    )
-
-                    IconButton(onClick = {
-                        intervalSeconds = (intervalSeconds + 1f).coerceAtMost(300f)
-                        prefs.edit().putInt("interval", intervalSeconds.toInt()).apply()
-                    }) { Icon(Icons.Default.KeyboardArrowRight, "加1秒") }
-                }
-                Slider(
-                    value = intervalSeconds,
-                    onValueChange = {
-                        intervalSeconds = it
-                        prefs.edit().putInt("interval", it.toInt()).apply()
-                    },
-                    valueRange = 4f..300f,
-                    steps = 296
-                )
+                launcherIconUri = it.toString()
+                prefs.edit().putString("launcher_icon_uri", it.toString()).apply()
             }
         }
 
-        Spacer(Modifier.height(16.dp))
-
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("包含子文件夹", style = MaterialTheme.typography.titleMedium)
-                        Text("添加文件夹时是否扫描其子目录", style = MaterialTheme.typography.bodySmall)
-                    }
-                    Switch(checked = includeSubfolders, onCheckedChange = { includeSubfolders = it; prefs.edit().putBoolean("include_subfolders", it).apply() })
-                }
-                Divider(modifier = Modifier.padding(vertical = 12.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
-                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("亮屏/解锁时更换", style = MaterialTheme.typography.titleMedium)
-                        Text("每次打开屏幕自动换下一张", style = MaterialTheme.typography.bodySmall)
-                    }
-                    Switch(checked = switchOnScreenOn, onCheckedChange = { switchOnScreenOn = it; prefs.edit().putBoolean("switch_on_screen_on", it).apply() })
-                }
-                Divider(modifier = Modifier.padding(vertical = 12.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
-                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("多任务页面隐藏 App", style = MaterialTheme.typography.titleMedium)
-                        Text("开启后自动把当前界面移出多任务", style = MaterialTheme.typography.bodySmall)
-                    }
-                    Switch(checked = hideFromRecents, onCheckedChange = {
-                        hideFromRecents = it
-                        prefs.edit().putBoolean(PREF_HIDE_FROM_RECENTS, it).apply()
-                        if (it) {
-                            removeCurrentTaskFromRecents(context)
-                        }
-                    })
-                }
-                Divider(modifier = Modifier.padding(vertical = 12.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text("启动轮播图标", style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.height(8.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Surface(modifier = Modifier.size(56.dp).clip(CircleShape), color = MaterialTheme.colorScheme.surfaceVariant) {
-                            if (launcherIconUri != null) {
-                                AsyncImage(model = launcherIconUri, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                            } else {
-                                Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.padding(8.dp), tint = MaterialTheme.colorScheme.primary)
-                            }
-                        }
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Button(onClick = { iconPickerLauncher.launch(arrayOf("image/*")) }, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) { Text("选择图片", style = MaterialTheme.typography.labelMedium) }
-                            if (launcherIconUri != null) {
-                                TextButton(onClick = { launcherIconUri = null; prefs.edit().remove("launcher_icon_uri").apply() }, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) { Text("恢复默认", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error) }
-                            }
-                        }
-                    }
-                }
-                Divider(modifier = Modifier.padding(vertical = 12.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    var showMarkedMoveFolderBrowser by remember { mutableStateOf(false) }
-                    Text("标记移动目录", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        markedMoveTargetPath ?: "未设置，点击移动时会提示选择",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (markedMoveTargetPath != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-                    )
-                    Row(modifier = Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { showMarkedMoveFolderBrowser = true }, modifier = Modifier.weight(1f)) {
-                            Text("选择目录")
-                        }
-                        if (markedMoveTargetPath != null) {
-                            OutlinedButton(
-                                onClick = {
-                                    markedMoveTargetPath = null
-                                    prefs.edit().remove(PREF_MARKED_MOVE_TARGET_PATH).apply()
-                                }
-                            ) {
-                                Text("清除")
-                            }
-                        }
-                    }
-
-                    if (showMarkedMoveFolderBrowser) {
-                        FolderBrowserDialog(
-                            onDismiss = { showMarkedMoveFolderBrowser = false },
-                            onSelect = { path ->
-                                markedMoveTargetPath = path
-                                prefs.edit().putString(PREF_MARKED_MOVE_TARGET_PATH, path).apply()
-                                showMarkedMoveFolderBrowser = false
-                            }
-                        )
-                    }
-                }
-            }
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("选中边框颜色", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("yellow" to Color(0xFFFFEB3B), "red" to Color(0xFFFF5252), "blue" to Color(0xFF2196F3), "pink" to Color(0xFFFF4081)).forEach { (key, color) ->
-                        Box(modifier = Modifier.size(40.dp).background(color, RoundedCornerShape(20.dp)).clickable { selectedBorderColorKey = key; prefs.edit().putString("selected_border_color", key).apply() }.then(if (selectedBorderColorKey == key) Modifier.padding(2.dp) else Modifier))
-                    }
-                }
-            }
-        }
-
-        Spacer(Modifier.height(24.dp))
-        Text("FlashWall 备份与迁移", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
-        Spacer(Modifier.height(16.dp))
-
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                var showExportFolderBrowser by remember { mutableStateOf(false) }
-                Text("导出路径", style = MaterialTheme.typography.titleMedium)
-                Text(exportFolderPath ?: "未设置 (每次询问)", style = MaterialTheme.typography.bodySmall, color = if (exportFolderPath != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline)
-                Row(modifier = Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { showExportFolderBrowser = true }, modifier = Modifier.weight(1f)) { Text("选择目录") }
-                    if (exportFolderPath != null) {
-                        OutlinedButton(onClick = { exportFolderPath = null; prefs.edit().remove("export_folder").apply() }) { Text("清除") }
-                    }
-                }
-
-                if (showExportFolderBrowser) {
-                    FolderBrowserDialog(onDismiss = { showExportFolderBrowser = false }, onSelect = { path ->
-                        exportFolderPath = path
-                        prefs.edit().putString("export_folder", path).apply()
-                        showExportFolderBrowser = false
-                    })
-                }
-
-                Divider(modifier = Modifier.padding(vertical = 12.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = {
-                        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-                        val fileName = "FlashWall_config_$timestamp.json"
-                        val path = exportFolderPath
-                        if (path != null) {
-                            scope.launch(Dispatchers.IO) {
-                                try {
-                                    val file = File(path, fileName)
-                                    val json = JSONObject().apply {
-                                        put("interval", prefs.getInt("interval", 10))
-                                        put("include_subfolders", prefs.getBoolean("include_subfolders", false))
-                                        put("switch_on_screen_on", prefs.getBoolean("switch_on_screen_on", false))
-                                        put(PREF_HIDE_FROM_RECENTS, prefs.getBoolean(PREF_HIDE_FROM_RECENTS, false))
-                                        put("selected_border_color", prefs.getString("selected_border_color", "yellow"))
-                                        put("launcher_icon_uri", prefs.getString("launcher_icon_uri", null))
-                                        put("export_folder", prefs.getString("export_folder", null))
-                                        put("export_time", System.currentTimeMillis())
-                                    }
-                                    FileOutputStream(file).use { it.write(json.toString(4).toByteArray()) }
-                                    withContext(Dispatchers.Main) { Toast.makeText(context, "设置已导出至: ${file.name}", Toast.LENGTH_SHORT).show() }
-                                } catch (e: Exception) {
-                                    withContext(Dispatchers.Main) { Toast.makeText(context, "静默导出失败: ${e.message}", Toast.LENGTH_LONG).show() }
-                                }
-                            }
-                        } else {
-                            exportLauncher.launch(fileName)
-                        }
-                    }, modifier = Modifier.weight(1f)) {
-                        Icon(Icons.Default.Share, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("导出设置")
-                    }
-                    OutlinedButton(onClick = { importLauncher.launch(arrayOf("application/json")) }, modifier = Modifier.weight(1f)) {
-                        Icon(Icons.Default.Refresh, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("导入设置")
-                    }
-                }
-            }
-        }
-
-        Spacer(Modifier.height(32.dp))
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-fun MarkedGalleryScreen() {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val db = AppDatabase.getDatabase(context)
-    val markedWallpapers by db.wallpaperDao().getMarkedWallpapers().collectAsState(initial = emptyList())
-
-    val selectedPaths = remember { mutableStateListOf<String>() }
-    var isMoving by remember { mutableStateOf(false) }
-    var previewIndex by remember { mutableStateOf<Int?>(null) }
-    var showDeleteConfirm by remember { mutableStateOf(false) }
-    var showFolderBrowserForMove by remember { mutableStateOf(false) }
-
-    val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
-    val borderColor = remember(prefs.getString("selected_border_color", "yellow")) {
-        when (prefs.getString("selected_border_color", "yellow")) {
-            "red" -> Color(0xFFFF5252)
-            "blue" -> Color(0xFF2196F3)
-            "pink" -> Color(0xFFFF4081)
-            else -> Color(0xFFFFEB3B)
-        }
-    }
-
-    var rememberedTargetPath by remember { mutableStateOf(prefs.getString(PREF_MARKED_MOVE_TARGET_PATH, null)) }
-    val rememberedTargetName = remember(rememberedTargetPath) {
-        rememberedTargetPath?.let { path -> File(path).name.ifEmpty { path } }
-    }
-
-    fun performMove(targetPath: String) {
-        scope.launch(Dispatchers.IO) {
-            isMoving = true
-            val targetDir = File(targetPath)
-            if (targetDir.exists() && targetDir.isDirectory) {
-                val list = if (selectedPaths.isEmpty()) markedWallpapers else markedWallpapers.filter { wp -> selectedPaths.contains(wp.path) }
-                list.forEach { wp ->
+        val importLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.OpenDocument()
+        ) { uri ->
+            uri?.let {
+                scope.launch(Dispatchers.IO) {
                     try {
-                        val sourceUri = Uri.parse(wp.path)
-                        val sourceFile = if (wp.path.startsWith("file://")) File(sourceUri.path!!) else null
-
-                        if (sourceFile != null && sourceFile.exists()) {
-                            val destFile = File(targetDir, sourceFile.name)
-                            sourceFile.renameTo(destFile)
-                            db.wallpaperDao().deleteWallpaperByPath(wp.path)
-                        } else {
-                            val docFile = DocumentFile.fromSingleUri(context, sourceUri)
-                            if (docFile?.exists() == true) {
-                                val newFile = File(targetDir, docFile.name ?: "image_${System.currentTimeMillis()}.jpg")
-                                context.contentResolver.openInputStream(sourceUri)?.use { input ->
-                                    newFile.outputStream().use { output -> input.copyTo(output) }
-                                }
-                                docFile.delete()
-                                db.wallpaperDao().deleteWallpaperByPath(wp.path)
+                        val content = context.contentResolver.openInputStream(it)?.bufferedReader()
+                            ?.use { r -> r.readText() }
+                        if (content != null) {
+                            val json = JSONObject(content)
+                            prefs.edit().apply {
+                                if (json.has("interval")) putInt(
+                                    "interval",
+                                    json.getInt("interval")
+                                )
+                                if (json.has("include_subfolders")) putBoolean(
+                                    "include_subfolders",
+                                    json.getBoolean("include_subfolders")
+                                )
+                                if (json.has("switch_on_screen_on")) putBoolean(
+                                    "switch_on_screen_on",
+                                    json.getBoolean("switch_on_screen_on")
+                                )
+                                if (json.has(PREF_HIDE_FROM_RECENTS)) putBoolean(
+                                    PREF_HIDE_FROM_RECENTS,
+                                    json.getBoolean(PREF_HIDE_FROM_RECENTS)
+                                )
+                                if (json.has("selected_border_color")) putString(
+                                    "selected_border_color",
+                                    json.getString("selected_border_color")
+                                )
+                                if (json.has("launcher_icon_uri")) putString(
+                                    "launcher_icon_uri",
+                                    json.optString("launcher_icon_uri").ifEmpty { null })
+                                if (json.has(PREF_MARKED_MOVE_TARGET_PATH)) putString(
+                                    PREF_MARKED_MOVE_TARGET_PATH,
+                                    json.optString(PREF_MARKED_MOVE_TARGET_PATH).ifEmpty { null })
+                                if (json.has("export_folder")) putString(
+                                    "export_folder",
+                                    json.optString("export_folder").ifEmpty { null })
+                                apply()
+                            }
+                            withContext(Dispatchers.Main) {
+                                intervalSeconds = prefs.getInt("interval", 10).toFloat()
+                                includeSubfolders = prefs.getBoolean("include_subfolders", false)
+                                switchOnScreenOn = prefs.getBoolean("switch_on_screen_on", false)
+                                hideFromRecents = prefs.getBoolean(PREF_HIDE_FROM_RECENTS, false)
+                                selectedBorderColorKey =
+                                    prefs.getString("selected_border_color", "yellow") ?: "yellow"
+                                launcherIconUri = prefs.getString("launcher_icon_uri", null)
+                                markedMoveTargetPath =
+                                    prefs.getString(PREF_MARKED_MOVE_TARGET_PATH, null)
+                                exportFolderPath = prefs.getString("export_folder", null)
+                                Toast.makeText(
+                                    context,
+                                    "FlashWall 设置导入成功",
+                                    Toast.LENGTH_SHORT
+                                ).show()
                             }
                         }
                     } catch (e: Exception) {
-                        Log.e("Move", "Error moving ${wp.path}: ${e.message}")
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(context, "导入失败，请检查文件格式", Toast.LENGTH_LONG)
+                                .show()
+                        }
                     }
                 }
-                withContext(Dispatchers.Main) {
-                    selectedPaths.clear()
-                    Toast.makeText(context, "批量移动完成", Toast.LENGTH_SHORT).show()
-                }
-            } else {
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "无法访问目标文件夹，请长按重置", Toast.LENGTH_LONG).show()
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .verticalScroll(rememberScrollState())
+        ) {
+            ScreenHeader(
+                title = "设置",
+                subtitle = "调整轮播节奏、显示方式与备份目录"
+            )
+            Text(
+                "基础设置",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(horizontal = 20.dp)
+            )
+            Spacer(Modifier.height(10.dp))
+
+            Card(
+                modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth(),
+                shape = RoundedCornerShape(28.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        "切换间隔: ${intervalSeconds.toInt()} 秒",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        IconButton(onClick = {
+                            intervalSeconds = (intervalSeconds - 1f).coerceAtLeast(4f)
+                            prefs.edit().putInt("interval", intervalSeconds.toInt()).apply()
+                        }) { Icon(Icons.Default.KeyboardArrowLeft, "减1秒") }
+
+                        TextField(
+                            value = intervalSeconds.toInt().toString(),
+                            onValueChange = {
+                                val newValue = it.toIntOrNull()
+                                if (newValue != null) {
+                                    intervalSeconds = newValue.toFloat().coerceIn(4f, 300f)
+                                    prefs.edit().putInt("interval", intervalSeconds.toInt()).apply()
+                                }
+                            },
+                            modifier = Modifier.width(80.dp),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            textStyle = MaterialTheme.typography.bodyLarge
+                        )
+
+                        IconButton(onClick = {
+                            intervalSeconds = (intervalSeconds + 1f).coerceAtMost(300f)
+                            prefs.edit().putInt("interval", intervalSeconds.toInt()).apply()
+                        }) { Icon(Icons.Default.KeyboardArrowRight, "加1秒") }
+                    }
+                    Slider(
+                        value = intervalSeconds,
+                        onValueChange = {
+                            intervalSeconds = it
+                            prefs.edit().putInt("interval", it.toInt()).apply()
+                        },
+                        valueRange = 4f..300f,
+                        steps = 296
+                    )
                 }
             }
-            isMoving = false
+
+            Spacer(Modifier.height(16.dp))
+
+            Card(
+                modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth(),
+                shape = RoundedCornerShape(28.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("包含子文件夹", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "添加文件夹时是否扫描其子目录",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Switch(
+                            checked = includeSubfolders,
+                            onCheckedChange = {
+                                includeSubfolders = it; prefs.edit()
+                                .putBoolean("include_subfolders", it).apply()
+                            })
+                    }
+                    Divider(
+                        modifier = Modifier.padding(vertical = 12.dp),
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("亮屏/解锁时更换", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "每次打开屏幕自动换下一张",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Switch(
+                            checked = switchOnScreenOn,
+                            onCheckedChange = {
+                                switchOnScreenOn = it; prefs.edit()
+                                .putBoolean("switch_on_screen_on", it).apply()
+                            })
+                    }
+                    Divider(
+                        modifier = Modifier.padding(vertical = 12.dp),
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("多任务页面隐藏 App", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "开启后自动把当前界面移出多任务",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Switch(checked = hideFromRecents, onCheckedChange = {
+                            hideFromRecents = it
+                            prefs.edit().putBoolean(PREF_HIDE_FROM_RECENTS, it).apply()
+                            if (it) {
+                                removeCurrentTaskFromRecents(context)
+                            }
+                        })
+                    }
+                    Divider(
+                        modifier = Modifier.padding(vertical = 12.dp),
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text("启动轮播图标", style = MaterialTheme.typography.titleMedium)
+                        Spacer(Modifier.height(8.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Surface(
+                                modifier = Modifier.size(56.dp).clip(CircleShape),
+                                color = MaterialTheme.colorScheme.surfaceVariant
+                            ) {
+                                if (launcherIconUri != null) {
+                                    AsyncImage(
+                                        model = launcherIconUri,
+                                        contentDescription = null,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.PlayArrow,
+                                        contentDescription = null,
+                                        modifier = Modifier.padding(8.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Button(
+                                    onClick = { iconPickerLauncher.launch(arrayOf("image/*")) },
+                                    contentPadding = PaddingValues(
+                                        horizontal = 12.dp,
+                                        vertical = 4.dp
+                                    )
+                                ) { Text("选择图片", style = MaterialTheme.typography.labelMedium) }
+                                if (launcherIconUri != null) {
+                                    TextButton(
+                                        onClick = {
+                                            launcherIconUri = null; prefs.edit()
+                                            .remove("launcher_icon_uri").apply()
+                                        },
+                                        contentPadding = PaddingValues(
+                                            horizontal = 12.dp,
+                                            vertical = 4.dp
+                                        )
+                                    ) {
+                                        Text(
+                                            "恢复默认",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.error
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Divider(
+                        modifier = Modifier.padding(vertical = 12.dp),
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        var showMarkedMoveFolderBrowser by remember { mutableStateOf(false) }
+                        Text("标记移动目录", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            readableMarkedMoveTargetPath ?: "未设置，点击移动时会提示选择",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (markedMoveTargetPath != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                        )
+                        Row(
+                            modifier = Modifier.padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = { showMarkedMoveFolderBrowser = true },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("选择目录")
+                            }
+                            if (markedMoveTargetPath != null) {
+                                OutlinedButton(
+                                    onClick = {
+                                        markedMoveTargetPath = null
+                                        prefs.edit().remove(PREF_MARKED_MOVE_TARGET_PATH).apply()
+                                    }
+                                ) {
+                                    Text("清除")
+                                }
+                            }
+                        }
+
+                        if (showMarkedMoveFolderBrowser) {
+                            FolderBrowserDialog(
+                                onDismiss = { showMarkedMoveFolderBrowser = false },
+                                onSelect = { path ->
+                                    markedMoveTargetPath = path
+                                    prefs.edit().putString(PREF_MARKED_MOVE_TARGET_PATH, path)
+                                        .apply()
+                                    showMarkedMoveFolderBrowser = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            Card(
+                modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth(),
+                shape = RoundedCornerShape(28.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("选中边框颜色", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(
+                            "yellow" to Color(0xFFFFEB3B),
+                            "red" to Color(0xFFFF5252),
+                            "blue" to Color(0xFF2196F3),
+                            "pink" to Color(0xFFFF4081)
+                        ).forEach { (key, color) ->
+                            Box(
+                                modifier = Modifier.size(40.dp)
+                                    .background(color, RoundedCornerShape(20.dp)).clickable {
+                                    selectedBorderColorKey = key; prefs.edit()
+                                    .putString("selected_border_color", key).apply()
+                                }
+                                    .then(if (selectedBorderColorKey == key) Modifier.padding(2.dp) else Modifier)
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
+            Text(
+                "备份与迁移",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(horizontal = 20.dp)
+            )
+            Spacer(Modifier.height(16.dp))
+
+            Card(
+                modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth(),
+                shape = RoundedCornerShape(28.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("导出路径", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        readableExportFolderPath ?: "未设置（每次询问）",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (exportFolderPath != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                    )
+                    Row(
+                        modifier = Modifier.padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { exportFolderPickerLauncher.launch(null) },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(16.dp)
+                        ) { Text("选择目录") }
+                        if (exportFolderPath != null) {
+                            OutlinedButton(onClick = {
+                                exportFolderPath = null; prefs.edit().remove("export_folder")
+                                .apply()
+                            }) { Text("清除") }
+                        }
+                    }
+
+                    Divider(
+                        modifier = Modifier.padding(vertical = 12.dp),
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = {
+                            val timestamp = SimpleDateFormat(
+                                "yyyyMMdd_HHmmss",
+                                Locale.getDefault()
+                            ).format(Date())
+                            val fileName = "FlashWall_config_$timestamp.json"
+                            val path = exportFolderPath
+                            if (path != null) {
+                                scope.launch(Dispatchers.IO) {
+                                    try {
+                                        val json = JSONObject().apply {
+                                            put("interval", prefs.getInt("interval", 10))
+                                            put(
+                                                "include_subfolders",
+                                                prefs.getBoolean("include_subfolders", false)
+                                            )
+                                            put(
+                                                "switch_on_screen_on",
+                                                prefs.getBoolean("switch_on_screen_on", false)
+                                            )
+                                            put(
+                                                PREF_HIDE_FROM_RECENTS,
+                                                prefs.getBoolean(PREF_HIDE_FROM_RECENTS, false)
+                                            )
+                                            put(
+                                                "selected_border_color",
+                                                prefs.getString("selected_border_color", "yellow")
+                                            )
+                                            put(
+                                                "launcher_icon_uri",
+                                                prefs.getString("launcher_icon_uri", null)
+                                            )
+                                            put(
+                                                "export_folder",
+                                                prefs.getString("export_folder", null)
+                                            )
+                                            put("export_time", System.currentTimeMillis())
+                                        }
+                                        val savedName = writeTextToDirectory(
+                                            context = context,
+                                            rawDirectory = path,
+                                            fileName = fileName,
+                                            contents = json.toString(4)
+                                        )
+                                        withContext(Dispatchers.Main) {
+                                            Toast.makeText(
+                                                context,
+                                                "设置已导出至: $savedName",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    } catch (e: Exception) {
+                                        withContext(Dispatchers.Main) {
+                                            Toast.makeText(
+                                                context,
+                                                "静默导出失败: ${e.message}",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                        }
+                                    }
+                                }
+                            } else {
+                                exportLauncher.launch(fileName)
+                            }
+                        }, modifier = Modifier.weight(1f)) {
+                            Icon(Icons.Default.Share, null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("导出设置")
+                        }
+                        OutlinedButton(
+                            onClick = { importLauncher.launch(arrayOf("application/json")) },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Refresh, null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("导入设置")
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(32.dp))
         }
     }
 
-    if (showFolderBrowserForMove) {
-        FolderBrowserDialog(
-            onDismiss = { showFolderBrowserForMove = false },
-            onSelect = { path ->
-                prefs.edit().putString(PREF_MARKED_MOVE_TARGET_PATH, path).apply()
-                rememberedTargetPath = path
-                performMove(path)
-                showFolderBrowserForMove = false
+    @OptIn(ExperimentalFoundationApi::class)
+    @Composable
+    fun MarkedGalleryScreen() {
+        val context = LocalContext.current
+        val scope = rememberCoroutineScope()
+        val db = AppDatabase.getDatabase(context)
+        val markedWallpapers by db.wallpaperDao().getMarkedWallpapers()
+            .collectAsState(initial = emptyList())
+
+        val selectedPaths = remember { mutableStateListOf<String>() }
+        var isMoving by remember { mutableStateOf(false) }
+        var previewIndex by remember { mutableStateOf<Int?>(null) }
+        var showDeleteConfirm by remember { mutableStateOf(false) }
+        var showFolderBrowserForMove by remember { mutableStateOf(false) }
+
+        val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
+        val borderColor = remember(prefs.getString("selected_border_color", "yellow")) {
+            when (prefs.getString("selected_border_color", "yellow")) {
+                "red" -> Color(0xFFFF5252)
+                "blue" -> Color(0xFF2196F3)
+                "pink" -> Color(0xFFFF4081)
+                else -> Color(0xFFFFEB3B)
             }
-        )
-    }
+        }
 
-    if (showDeleteConfirm) {
-        AlertDialog(
-            onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("确认取消标记") },
-            text = { Text("确定要取消所选图片的标记吗？\n(这不会删除物理文件)") },
-            confirmButton = {
-                TextButton(onClick = {
-                    scope.launch(Dispatchers.IO) {
-                        selectedPaths.forEach { db.wallpaperDao().markWallpaper(it, false) }
-                        selectedPaths.clear()
-                    }
-                    showDeleteConfirm = false
-                }) {
-                    Text("确定", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text("取消")
-                }
-            }
-        )
-    }
+        var rememberedTargetPath by remember {
+            mutableStateOf(
+                prefs.getString(
+                    PREF_MARKED_MOVE_TARGET_PATH,
+                    null
+                )
+            )
+        }
+        val rememberedTargetName = remember(rememberedTargetPath) {
+            displayableDirectoryPath(context, rememberedTargetPath)
+        }
 
-    BackHandler(enabled = selectedPaths.isNotEmpty() || previewIndex != null) {
-        if (previewIndex != null) previewIndex = null else selectedPaths.clear()
-    }
-
-    Scaffold(
-        bottomBar = {
-            if (markedWallpapers.isNotEmpty()) {
-                Surface(
-                    tonalElevation = 8.dp,
-                    shadowElevation = 8.dp,
-                    color = MaterialTheme.colorScheme.surface
-                ) {
-                    Column(modifier = Modifier.padding(16.dp).fillMaxWidth()) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            OutlinedButton(
-                                onClick = { if (selectedPaths.isNotEmpty()) showDeleteConfirm = true },
-                                modifier = Modifier.weight(1f),
-                                enabled = selectedPaths.isNotEmpty(),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                            ) {
-                                Icon(Icons.Default.Delete, contentDescription = null)
-                                Spacer(Modifier.width(4.dp))
-                                Text("取消标记")
+        fun performMove(targetPath: String) {
+            scope.launch(Dispatchers.IO) {
+                isMoving = true
+                if (isDirectoryAvailable(context, targetPath)) {
+                    val list =
+                        if (selectedPaths.isEmpty()) markedWallpapers else markedWallpapers.filter { wp ->
+                            selectedPaths.contains(wp.path)
+                        }
+                    list.forEach { wp ->
+                        try {
+                            if (moveWallpaperToDirectory(context, wp.path, targetPath)) {
+                                db.wallpaperDao().deleteWallpaperByPath(wp.path)
                             }
+                        } catch (e: Exception) {
+                            Log.e("Move", "Error moving ${wp.path}: ${e.message}")
+                        }
+                    }
+                    withContext(Dispatchers.Main) {
+                        selectedPaths.clear()
+                        Toast.makeText(context, "批量移动完成", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "无法访问目标文件夹，请长按重置", Toast.LENGTH_LONG)
+                            .show()
+                    }
+                }
+                isMoving = false
+            }
+        }
 
-                            val isMoveEnabled = !isMoving
-                            Button(
-                                onClick = {
-                                    val path = rememberedTargetPath
-                                    if (path != null) {
-                                        performMove(path)
-                                    } else {
-                                        Toast.makeText(context, "请先在设置里配置标记移动目录", Toast.LENGTH_SHORT).show()
-                                        showFolderBrowserForMove = true
-                                    }
-                                },
-                                modifier = Modifier.weight(1f).combinedClickable(
+        if (showFolderBrowserForMove) {
+            FolderBrowserDialog(
+                onDismiss = { showFolderBrowserForMove = false },
+                onSelect = { path ->
+                    prefs.edit().putString(PREF_MARKED_MOVE_TARGET_PATH, path).apply()
+                    rememberedTargetPath = path
+                    performMove(path)
+                    showFolderBrowserForMove = false
+                }
+            )
+        }
+
+        if (showDeleteConfirm) {
+            AlertDialog(
+                onDismissRequest = { showDeleteConfirm = false },
+                title = { Text("确认取消标记") },
+                text = { Text("确定要取消所选图片的标记吗？\n(这不会删除物理文件)") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        scope.launch(Dispatchers.IO) {
+                            selectedPaths.forEach { db.wallpaperDao().markWallpaper(it, false) }
+                            selectedPaths.clear()
+                        }
+                        showDeleteConfirm = false
+                    }) {
+                        Text("确定", color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteConfirm = false }) {
+                        Text("取消")
+                    }
+                }
+            )
+        }
+
+        BackHandler(enabled = selectedPaths.isNotEmpty() || previewIndex != null) {
+            if (previewIndex != null) previewIndex = null else selectedPaths.clear()
+        }
+
+        Scaffold(
+            bottomBar = {
+                if (markedWallpapers.isNotEmpty()) {
+                    Surface(
+                        tonalElevation = 8.dp,
+                        shadowElevation = 8.dp,
+                        color = MaterialTheme.colorScheme.surface
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .padding(horizontal = 16.dp, vertical = 12.dp)
+                                .fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = {
+                                        if (selectedPaths.isNotEmpty()) showDeleteConfirm = true
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    enabled = selectedPaths.isNotEmpty(),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                                ) {
+                                    Icon(Icons.Default.Delete, contentDescription = null)
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("取消标记")
+                                }
+
+                                val isMoveEnabled = !isMoving
+                                Button(
                                     onClick = {
                                         val path = rememberedTargetPath
                                         if (path != null) {
                                             performMove(path)
                                         } else {
-                                            Toast.makeText(context, "请先在设置里配置标记移动目录", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(
+                                                context,
+                                                "请先在设置里配置标记移动目录",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
                                             showFolderBrowserForMove = true
                                         }
                                     },
-                                    onLongClick = { showFolderBrowserForMove = true }
-                                ),
-                                enabled = isMoveEnabled
-                            ) {
-                                Icon(Icons.Default.Favorite, contentDescription = null)
-                                Spacer(Modifier.width(4.dp))
-                                Text(if (selectedPaths.isEmpty()) "全部移动" else "移动所选")
+                                    modifier = Modifier.weight(1f).combinedClickable(
+                                        onClick = {
+                                            val path = rememberedTargetPath
+                                            if (path != null) {
+                                                performMove(path)
+                                            } else {
+                                                Toast.makeText(
+                                                    context,
+                                                    "请先在设置里配置标记移动目录",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                                showFolderBrowserForMove = true
+                                            }
+                                        },
+                                        onLongClick = { showFolderBrowserForMove = true }
+                                    ),
+                                    enabled = isMoveEnabled,
+                                    shape = RoundedCornerShape(16.dp)
+                                ) {
+                                    Icon(Icons.Default.Favorite, contentDescription = null)
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(if (selectedPaths.isEmpty()) "全部移动" else "移动所选")
+                                }
+
+                                TextButton(
+                                    onClick = {
+                                        if (selectedPaths.size < markedWallpapers.size) {
+                                            selectedPaths.clear()
+                                            selectedPaths.addAll(markedWallpapers.map { it.path })
+                                        } else {
+                                            selectedPaths.clear()
+                                        }
+                                    }
+                                ) {
+                                    Text(if (selectedPaths.size < markedWallpapers.size) "全选" else "全不选")
+                                }
                             }
 
-                            TextButton(
-                                onClick = {
-                                    if (selectedPaths.size < markedWallpapers.size) {
-                                        selectedPaths.clear()
-                                        selectedPaths.addAll(markedWallpapers.map { it.path })
-                                    } else {
-                                        selectedPaths.clear()
-                                    }
-                                }
-                            ) {
-                                Text(if (selectedPaths.size < markedWallpapers.size) "全选" else "全不选")
+                            if (rememberedTargetName != null) {
+                                Text(
+                                    text = "目标: $rememberedTargetName (长按可修改目录)",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.outline,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                        .align(Alignment.CenterHorizontally)
+                                )
                             }
                         }
+                    }
+                }
+            }
+        ) { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
+                    .padding(padding)
+            ) {
+                ScreenHeader(
+                    title = if (selectedPaths.isEmpty()) "标记" else "已选 ${selectedPaths.size} 项",
+                    subtitle = if (markedWallpapers.isEmpty()) {
+                        "还没有收藏壁纸"
+                    } else {
+                        "共 ${markedWallpapers.size} 张 · 点击预览，长按选择"
+                    }
+                )
 
-                        if (rememberedTargetName != null) {
+                if (markedWallpapers.isEmpty()) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .weight(1f),
+                        shape = RoundedCornerShape(28.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(32.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Surface(
+                                modifier = Modifier.size(72.dp),
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.primaryContainer
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.Default.FavoriteBorder,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(34.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(16.dp))
                             Text(
-                                text = "目标: $rememberedTargetName (长按可修改目录)",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.outline,
-                                modifier = Modifier.padding(top = 4.dp).align(Alignment.CenterHorizontally)
+                                "标记的壁纸会出现在这里",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                "在壁纸轮播时使用快捷入口即可标记",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(3),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        gridItemsIndexed(markedWallpapers) { index, wp ->
+                            val isSelected = selectedPaths.contains(wp.path)
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .aspectRatio(0.7f)
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .combinedClickable(
+                                        onClick = {
+                                            if (selectedPaths.isEmpty()) previewIndex = index
+                                            else {
+                                                if (isSelected) selectedPaths.remove(wp.path)
+                                                else selectedPaths.add(wp.path)
+                                            }
+                                        },
+                                        onLongClick = {
+                                            if (!isSelected) selectedPaths.add(wp.path)
+                                        }
+                                    ),
+                                shape = RoundedCornerShape(18.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+                                ),
+                                border = if (isSelected) BorderStroke(4.dp, borderColor) else null
+                            ) {
+                                AsyncImage(
+                                    model = wp.path,
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        previewIndex?.let { initial ->
+            val pagerState = rememberPagerState(initialPage = initial) { markedWallpapers.size }
+            Dialog(
+                onDismissRequest = { previewIndex = null },
+                properties = DialogProperties(usePlatformDefaultWidth = false)
+            ) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = androidx.compose.ui.graphics.Color.Black
+                ) {
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier.fillMaxSize(),
+                        pageSpacing = 16.dp
+                    ) { page ->
+                        val wp = markedWallpapers.getOrNull(page)
+                        Box(
+                            modifier = Modifier.fillMaxSize()
+                                .combinedClickable(onClick = { previewIndex = null })
+                        ) {
+                            if (wp != null) AsyncImage(
+                                model = wp.path,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Fit
                             )
                         }
                     }
                 }
             }
         }
-    ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
-            Text(
-                if (selectedPaths.isEmpty()) "FlashWall 已标记 (${markedWallpapers.size})" else "已选 ${selectedPaths.size} 项",
-                style = MaterialTheme.typography.headlineSmall
-            )
-
-            Spacer(Modifier.height(16.dp))
-
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(3),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                gridItemsIndexed(markedWallpapers) { index, wp ->
-                    val isSelected = selectedPaths.contains(wp.path)
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(0.7f)
-                            .combinedClickable(
-                                onClick = {
-                                    if (selectedPaths.isEmpty()) previewIndex = index
-                                    else {
-                                        if (isSelected) selectedPaths.remove(wp.path)
-                                        else selectedPaths.add(wp.path)
-                                    }
-                                },
-                                onLongClick = {
-                                    if (!isSelected) selectedPaths.add(wp.path)
-                                }
-                            ),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
-                        ),
-                        border = if (isSelected) BorderStroke(4.dp, borderColor) else null
-                    ) {
-                        AsyncImage(
-                            model = wp.path,
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    }
-                }
-            }
-        }
     }
-
-    previewIndex?.let { initial ->
-        val pagerState = rememberPagerState(initialPage = initial) { markedWallpapers.size }
-        Dialog(onDismissRequest = { previewIndex = null }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-            Surface(modifier = Modifier.fillMaxSize(), color = androidx.compose.ui.graphics.Color.Black) {
-                HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize(), pageSpacing = 16.dp) { page ->
-                    val wp = markedWallpapers.getOrNull(page)
-                    Box(modifier = Modifier.fillMaxSize().combinedClickable(onClick = { previewIndex = null })) {
-                        if (wp != null) AsyncImage(model = wp.path, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
-                    }
-                }
-            }
-        }
-    }
-}
