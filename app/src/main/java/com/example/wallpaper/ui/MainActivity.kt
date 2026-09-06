@@ -78,6 +78,7 @@ import org.json.JSONObject
 
 private const val PREF_HIDE_FROM_RECENTS = "hide_from_recents"
 private const val PREF_MARKED_MOVE_TARGET_PATH = "marked_move_target_path"
+private const val DEFAULT_INTERVAL_SECONDS = 5
 
 class MainActivity : ComponentActivity() {
     private var isOpeningWallpaperSettings = false
@@ -650,7 +651,7 @@ fun FolderBrowserDialog(
 
         var intervalSeconds by remember {
             mutableFloatStateOf(
-                prefs.getInt("interval", 10).toFloat()
+                prefs.getInt("interval", DEFAULT_INTERVAL_SECONDS).toFloat()
             )
         }
         var includeSubfolders by remember {
@@ -733,7 +734,7 @@ fun FolderBrowserDialog(
                 scope.launch(Dispatchers.IO) {
                     try {
                         val json = JSONObject().apply {
-                            put("interval", prefs.getInt("interval", 10))
+                            put("interval", prefs.getInt("interval", DEFAULT_INTERVAL_SECONDS))
                             put("include_subfolders", prefs.getBoolean("include_subfolders", false))
                             put(
                                 "switch_on_screen_on",
@@ -832,7 +833,7 @@ fun FolderBrowserDialog(
                                 apply()
                             }
                             withContext(Dispatchers.Main) {
-                                intervalSeconds = prefs.getInt("interval", 10).toFloat()
+                                intervalSeconds = prefs.getInt("interval", DEFAULT_INTERVAL_SECONDS).toFloat()
                                 includeSubfolders = prefs.getBoolean("include_subfolders", false)
                                 switchOnScreenOn = prefs.getBoolean("switch_on_screen_on", false)
                                 hideFromRecents = prefs.getBoolean(PREF_HIDE_FROM_RECENTS, false)
@@ -879,18 +880,91 @@ fun FolderBrowserDialog(
 
             Card(
                 modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth(),
-                shape = RoundedCornerShape(28.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                shape = RoundedCornerShape(32.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.78f)
+                ),
+                border = BorderStroke(
+                    1.dp,
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                )
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        "切换间隔: ${intervalSeconds.toInt()} 秒",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Spacer(Modifier.height(8.dp))
+                Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 22.dp)) {
                     Row(
+                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Surface(
+                            modifier = Modifier.size(48.dp),
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primary
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Default.Refresh,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimary
+                                )
+                            }
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "自动播放",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Text(
+                                "每隔一段时间切换下一张壁纸",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f)
+                            )
+                        }
+                        Text(
+                            "${intervalSeconds.toInt()} 秒",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                    Spacer(Modifier.height(18.dp))
+
+                    Slider(
+                        value = intervalSeconds,
+                        onValueChange = {
+                            intervalSeconds = it
+                            prefs.edit().putInt("interval", it.toInt()).apply()
+                        },
+                        valueRange = 4f..300f,
+                        steps = 295,
+                        colors = SliderDefaults.colors(
+                            thumbColor = MaterialTheme.colorScheme.primary,
+                            activeTrackColor = MaterialTheme.colorScheme.primary,
+                            inactiveTrackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.16f)
+                        )
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            "4 秒",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.64f)
+                        )
+                        Text(
+                            "300 秒",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.64f)
+                        )
+                    }
+
+                    Spacer(Modifier.height(14.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         IconButton(onClick = {
                             intervalSeconds = (intervalSeconds - 1f).coerceAtLeast(4f)
@@ -906,9 +980,16 @@ fun FolderBrowserDialog(
                                     prefs.edit().putInt("interval", intervalSeconds.toInt()).apply()
                                 }
                             },
-                            modifier = Modifier.width(80.dp),
+                            modifier = Modifier.weight(1f),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true,
+                            label = { Text("精确设置") },
+                            trailingIcon = { Text("秒") },
+                            shape = RoundedCornerShape(18.dp),
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.58f)
+                            ),
                             textStyle = MaterialTheme.typography.bodyLarge
                         )
 
@@ -917,15 +998,6 @@ fun FolderBrowserDialog(
                             prefs.edit().putInt("interval", intervalSeconds.toInt()).apply()
                         }) { Icon(Icons.Default.KeyboardArrowRight, "加1秒") }
                     }
-                    Slider(
-                        value = intervalSeconds,
-                        onValueChange = {
-                            intervalSeconds = it
-                            prefs.edit().putInt("interval", it.toInt()).apply()
-                        },
-                        valueRange = 4f..300f,
-                        steps = 296
-                    )
                 }
             }
 
@@ -1202,7 +1274,7 @@ fun FolderBrowserDialog(
                                 scope.launch(Dispatchers.IO) {
                                     try {
                                         val json = JSONObject().apply {
-                                            put("interval", prefs.getInt("interval", 10))
+                                            put("interval", prefs.getInt("interval", DEFAULT_INTERVAL_SECONDS))
                                             put(
                                                 "include_subfolders",
                                                 prefs.getBoolean("include_subfolders", false)

@@ -39,6 +39,7 @@ class MyWallpaperService : WallpaperService() {
         var currentWallpaperUri: String? = null
 
         private const val SCREEN_TRIGGER_DEBOUNCE_MS = 1500L
+        private const val DEFAULT_INTERVAL_SECONDS = 5
     }
 
     override fun onCreateEngine(): Engine {
@@ -121,7 +122,8 @@ class MyWallpaperService : WallpaperService() {
 
         private fun getPreferredInterval(): Long {
             val prefs = applicationContext.getSharedPreferences("settings", MODE_PRIVATE)
-            return (prefs.getInt("interval", 10).toLong() * 1000L).coerceAtLeast(4000L)
+            return (prefs.getInt("interval", DEFAULT_INTERVAL_SECONDS).toLong() * 1000L)
+                .coerceAtLeast(4000L)
         }
 
         private fun scheduleNext(delay: Long) {
