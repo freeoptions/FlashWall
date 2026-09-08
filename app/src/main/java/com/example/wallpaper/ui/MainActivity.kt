@@ -1034,6 +1034,57 @@ fun FolderBrowserDialog(
                         )
                     }
 
+                    Text(
+                        "快速设置",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f),
+                        modifier = Modifier.padding(top = 18.dp)
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(4, 5, 10).forEach { quickInterval ->
+                            val isSelected = intervalSeconds.toInt() == quickInterval
+                            Surface(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(44.dp)
+                                    .clickable {
+                                        intervalSeconds = quickInterval.toFloat()
+                                        prefs.edit().putInt("interval", quickInterval).apply()
+                                    },
+                                shape = RoundedCornerShape(14.dp),
+                                color = if (isSelected) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.66f)
+                                },
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isSelected) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.12f)
+                                    }
+                                )
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        "$quickInterval 秒",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = if (isSelected) {
+                                            MaterialTheme.colorScheme.onPrimary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurface
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     Spacer(Modifier.height(14.dp))
 
                     Row(
