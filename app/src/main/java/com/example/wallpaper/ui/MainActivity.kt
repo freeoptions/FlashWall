@@ -169,8 +169,8 @@ fun MainApp() {
                 NavigationBarItem(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
-                    icon = { Icon(Icons.Default.FavoriteBorder, contentDescription = "标记中心") },
-                    label = { Text("标记") },
+                    icon = { Icon(Icons.Default.Image, contentDescription = "筛选") },
+                    label = { Text("筛选") },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = MaterialTheme.colorScheme.primary,
                         selectedTextColor = MaterialTheme.colorScheme.onBackground,
@@ -182,6 +182,19 @@ fun MainApp() {
                 NavigationBarItem(
                     selected = selectedTab == 2,
                     onClick = { selectedTab = 2 },
+                    icon = { Icon(Icons.Default.FavoriteBorder, contentDescription = "标记中心") },
+                    label = { Text("标记") },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                        selectedTextColor = MaterialTheme.colorScheme.onBackground,
+                        indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                )
+                NavigationBarItem(
+                    selected = selectedTab == 3,
+                    onClick = { selectedTab = 3 },
                     icon = { Icon(Icons.Default.Settings, contentDescription = "设置") },
                     label = { Text("设置") },
                     colors = NavigationBarItemDefaults.colors(
@@ -198,8 +211,9 @@ fun MainApp() {
         Box(modifier = Modifier.padding(padding)) {
             when (selectedTab) {
                 0 -> FolderListScreen()
-                1 -> MarkedGalleryScreen()
-                2 -> SettingsScreen()
+                1 -> ScreeningScreen()
+                2 -> MarkedGalleryScreen()
+                3 -> SettingsScreen()
             }
         }
     }
@@ -547,7 +561,13 @@ fun FolderListScreen() {
                         TextButton(onClick = {
                             folderToDelete?.let { folder ->
                                 scope.launch {
-                                    db.wallpaperDao().deleteFolderWithWallpapers(folder.id)
+                                    db.wallpaperDao().deleteFolderFromRotation(
+                                        folderId = folder.id,
+                                        screeningFolderUri = prefs.getString(
+                                            PREF_SCREENING_FOLDER_URI,
+                                            null
+                                        )
+                                    )
                                     prefs.edit().putBoolean("pending_refresh_on_visible", true)
                                         .apply()
                                 }
@@ -724,9 +744,9 @@ fun FolderBrowserDialog(
         }
         var includeSubfolders by remember {
             mutableStateOf(
-                prefs.getBoolean(
+                    prefs.getBoolean(
                     "include_subfolders",
-                    false
+                    true
                 )
             )
         }
@@ -803,7 +823,7 @@ fun FolderBrowserDialog(
                     try {
                         val json = JSONObject().apply {
                             put("interval", prefs.getInt("interval", DEFAULT_INTERVAL_SECONDS))
-                            put("include_subfolders", prefs.getBoolean("include_subfolders", false))
+                            put("include_subfolders", prefs.getBoolean("include_subfolders", true))
                             put(
                                 "switch_on_screen_on",
                                 prefs.getBoolean("switch_on_screen_on", false)
@@ -902,7 +922,7 @@ fun FolderBrowserDialog(
                             }
                             withContext(Dispatchers.Main) {
                                 intervalSeconds = prefs.getInt("interval", DEFAULT_INTERVAL_SECONDS).toFloat()
-                                includeSubfolders = prefs.getBoolean("include_subfolders", false)
+                                includeSubfolders = prefs.getBoolean("include_subfolders", true)
                                 switchOnScreenOn = prefs.getBoolean("switch_on_screen_on", false)
                                 hideFromRecents = prefs.getBoolean(PREF_HIDE_FROM_RECENTS, false)
                                 selectedBorderColorKey =
@@ -1429,7 +1449,7 @@ fun FolderBrowserDialog(
                                             put("interval", prefs.getInt("interval", DEFAULT_INTERVAL_SECONDS))
                                             put(
                                                 "include_subfolders",
-                                                prefs.getBoolean("include_subfolders", false)
+                                                prefs.getBoolean("include_subfolders", true)
                                             )
                                             put(
                                                 "switch_on_screen_on",

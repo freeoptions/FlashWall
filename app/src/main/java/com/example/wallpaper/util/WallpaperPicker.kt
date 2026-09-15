@@ -9,6 +9,40 @@ import java.io.File
 
 class WallpaperPicker(private val context: Context) {
 
+    /**
+     * Returns the same MediaStore-indexed image paths used by wallpaper rotation,
+     * restricted to one folder. Keep the raw filesystem paths here so callers can
+     * persist them consistently and still use the original URI/path for loading.
+     */
+    suspend fun getImagePathsInFolder(
+        folderPath: String,
+        includeSubfolders: Boolean
+    ): List<String> {
+        return withContext(Dispatchers.IO) {
+            val normalizedFolderPath = folderPath.trimEnd('/').ifBlank { "/" }
+            val projection = arrayOf(MediaStore.Images.Media.DATA)
+            val imagePaths = LinkedHashSet<String>()
+
+            context.contentResolver.query(
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                projection,
+                "(${MediaStore.Images.Media.DATA} LIKE ?) AND (${MediaStore.Images.Media.MIME_TYPE} LIKE 'image/%')",
+                arrayOf("$normalizedFolderPath%"),
+                null
+            )?.use { cursor ->
+                val dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA)
+                while (cursor.moveToNext()) {
+                    val path = cursor.getString(dataColumn) ?: continue
+                    if (!isExistingImagePath(path)) continue
+                    if (!includeSubfolders && !isDirectChild(path, normalizedFolderPath)) continue
+                    imagePaths += path
+                }
+            }
+
+            imagePaths.toList()
+        }
+    }
+
     suspend fun getRandomWallpaper(): String? {
         return withContext(Dispatchers.IO) {
             val db = AppDatabase.getDatabase(context)
@@ -75,5 +109,10 @@ class WallpaperPicker(private val context: Context) {
 
     private fun toCoilFilePath(path: String): String {
         return if (path.startsWith("/")) "file://$path" else path
+    }
+
+    private fun isDirectChild(path: String, folderPath: String): Boolean {
+        val parentPath = File(path).parent?.trimEnd('/') ?: return false
+        return parentPath == folderPath
     }
 }

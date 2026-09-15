@@ -10,5 +10,7 @@ data class Folder(
     val name: String,
     @ColumnInfo(name = "uri") val uri: String,
     val isSelected: Boolean = true,
-    val position: Int = 0
+    val position: Int = 0,
+    // 筛选页目录不参与壁纸轮播，也不应被文件夹页的移除操作删除。
+    val isScreeningFolder: Boolean = false
 )
