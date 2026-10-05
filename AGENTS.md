@@ -1,6 +1,6 @@
 ﻿# FlashWall 项目专属规则
 
-通用规则见：`E:\@imFile-Download\AI-Useful-Prompt\通用开发工作规则.md`。
+本项目继承 Codex 已加载的全局 `AGENTS.md`（本机：`C:\Users\freez\.codex\AGENTS.md`）；以下保留项目专属规则。
 
 - 本项目是 Android Gradle 项目，应用模块位于 `app`，使用项目自带 Gradle Wrapper。
 - 这是壁纸相关应用；修改图片、壁纸、定时任务或后台行为时，注意 Android 生命周期、权限和后台限制。

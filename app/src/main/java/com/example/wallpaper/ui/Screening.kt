@@ -17,7 +17,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -42,23 +43,26 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder as FolderIcon
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -68,7 +72,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -110,15 +116,330 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
 
 internal const val PREF_SCREENING_FOLDER_URI = "screening_folder_uri"
-private const val PREF_SCREENING_IMMERSIVE = "screening_immersive"
+
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+@Composable
+private fun MarkedScreeningContent() {
+    val context = LocalContext.current
+    val database = remember { com.example.wallpaper.data.AppDatabase.getDatabase(context) }
+    val dao = remember { database.wallpaperDao() }
+    val scope = rememberCoroutineScope()
+    var previewIndex by remember { mutableStateOf<Int?>(null) }
+    val images by dao.getMarkedWallpapers().collectAsState(initial = emptyList())
+    val rotationFolders by dao.getAllFolders().collectAsState(initial = emptyList())
+    val selectedPaths = remember { mutableStateListOf<String>() }
+    var isMoving by remember { mutableStateOf(false) }
+    var showTargetFolderPicker by remember { mutableStateOf(false) }
+    var pendingMoveItems by remember { mutableStateOf<List<Wallpaper>>(emptyList()) }
+
+    LaunchedEffect(images) {
+        val availablePaths = images.mapTo(hashSetOf()) { it.path }
+        selectedPaths.retainAll(availablePaths)
+    }
+
+    fun moveItemsTo(targetFolder: Folder, itemsToMove: List<Wallpaper>) {
+        if (isMoving) return
+        val pathsToMove = itemsToMove.distinctBy { it.path }
+        if (pathsToMove.isEmpty()) return
+
+        isMoving = true
+        scope.launch(Dispatchers.IO) {
+            var movedCount = 0
+            try {
+                pathsToMove.forEach { wallpaper ->
+                    val movedPath = runCatching {
+                        moveWallpaperToDirectoryWithResult(context, wallpaper.path, targetFolder.uri)
+                    }.getOrNull()
+                    if (movedPath != null) {
+                        dao.deleteWallpaperByPath(wallpaper.path)
+                        val existingTarget = dao.getWallpaperByPath(movedPath)
+                        if (existingTarget == null) {
+                            dao.insertWallpaper(
+                                wallpaper.copy(
+                                    id = 0L,
+                                    path = movedPath,
+                                    folderId = targetFolder.id,
+                                    isMarked = false,
+                                    lastSeen = System.currentTimeMillis()
+                                )
+                            )
+                        } else {
+                            dao.updateWallpaper(
+                                existingTarget.copy(
+                                    folderId = targetFolder.id,
+                                    isMarked = false,
+                                    lastSeen = System.currentTimeMillis()
+                                )
+                            )
+                        }
+                        movedCount++
+                    }
+                }
+            } finally {
+                withContext(Dispatchers.Main) {
+                    selectedPaths.clear()
+                    isMoving = false
+                    val message = if (movedCount == pathsToMove.size) {
+                        "已移动 $movedCount 张图片到「${targetFolder.name}」"
+                    } else {
+                        "已移动 $movedCount/${pathsToMove.size} 张图片，请检查目标文件夹权限"
+                    }
+                    android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    fun deleteItems(itemsToDelete: List<Wallpaper>) {
+        if (isMoving) return
+        val pathsToDelete = itemsToDelete.distinctBy { it.path }
+        if (pathsToDelete.isEmpty()) return
+
+        isMoving = true
+        scope.launch(Dispatchers.IO) {
+            var deletedCount = 0
+            try {
+                pathsToDelete.forEach { wallpaper ->
+                    val deleted = runCatching {
+                        deleteWallpaperFile(context, wallpaper.path)
+                    }.getOrDefault(false)
+                    if (deleted) {
+                        dao.deleteWallpaperByPath(wallpaper.path)
+                        deletedCount++
+                    }
+                }
+            } finally {
+                withContext(Dispatchers.Main) {
+                    selectedPaths.removeAll(pathsToDelete.map { it.path }.toSet())
+                    if (deletedCount > 0) {
+                        val currentPreviewPath = previewIndex?.let { images.getOrNull(it)?.path }
+                        if (pathsToDelete.any { it.path == currentPreviewPath }) {
+                            previewIndex = null
+                        }
+                    }
+                    isMoving = false
+                    val message = if (deletedCount == pathsToDelete.size) {
+                        "已删除 $deletedCount 张图片"
+                    } else {
+                        "已删除 $deletedCount/${pathsToDelete.size} 张图片，部分文件无法删除"
+                    }
+                    android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    fun requestMove(itemsToMove: List<Wallpaper>) {
+        if (isMoving || itemsToMove.isEmpty()) return
+        pendingMoveItems = itemsToMove.distinctBy { it.path }
+        showTargetFolderPicker = true
+    }
+
+    fun confirmPendingMove(targetFolder: Folder) {
+        val itemsToMove = pendingMoveItems
+        pendingMoveItems = emptyList()
+        showTargetFolderPicker = false
+        val previewPath = previewIndex?.let { images.getOrNull(it)?.path }
+        if (itemsToMove.any { it.path == previewPath }) {
+            previewIndex = null
+        }
+        moveItemsTo(targetFolder, itemsToMove)
+    }
+
+    if (showTargetFolderPicker) {
+        AlertDialog(
+            onDismissRequest = { if (!isMoving) showTargetFolderPicker = false },
+            title = { Text("移动到轮播文件夹") },
+            text = {
+                if (rotationFolders.isEmpty()) {
+                    Text("还没有添加轮播文件夹，请先在“文件夹”页添加。")
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        rotationFolders.forEach { folder ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .clickable {
+                                        confirmPendingMove(folder)
+                                    }
+                                    .padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = false,
+                                    onClick = {
+                                        confirmPendingMove(folder)
+                                    }
+                                )
+                                Column(Modifier.weight(1f)) {
+                                    Text(folder.name, style = MaterialTheme.typography.titleSmall)
+                                    Text(
+                                        displayableDirectoryPath(context, folder.uri) ?: "目录暂不可解析",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { showTargetFolderPicker = false },
+                    enabled = !isMoving
+                ) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
+    if (previewIndex != null && images.isNotEmpty()) {
+        Dialog(
+            onDismissRequest = { previewIndex = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(Modifier.fillMaxSize(), color = Color.Black) {
+                ScreeningPreview(
+                    items = images,
+                    initialIndex = previewIndex ?: 0,
+                    onBack = { previewIndex = null },
+                    onDelete = { image -> deleteItems(listOf(image)) },
+                    onMove = { image ->
+                        requestMove(listOf(image))
+                    }
+                )
+            }
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("筛选") },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
+            )
+        },
+        bottomBar = {
+            if (selectedPaths.isNotEmpty()) {
+                Surface(
+                    tonalElevation = 8.dp,
+                    shadowElevation = 8.dp,
+                    color = MaterialTheme.colorScheme.surface
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedButton(
+                            onClick = { selectedPaths.clear() },
+                            enabled = !isMoving,
+                            modifier = Modifier.weight(0.8f),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Text("取消选择")
+                        }
+                        Button(
+                            onClick = {
+                                requestMove(images.filter { it.path in selectedPaths })
+                            },
+                            enabled = !isMoving,
+                            modifier = Modifier.weight(1.4f),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Icon(Icons.Default.FolderIcon, contentDescription = null)
+                            Spacer(Modifier.width(6.dp))
+                            Text(if (isMoving) "移动中…" else "移动到轮播文件夹")
+                        }
+                    }
+                }
+            }
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 16.dp)
+        ) {
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (selectedPaths.isEmpty()) {
+                        "${images.size} 张已标记图片"
+                    } else {
+                        "已选择 ${selectedPaths.size} 张"
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    if (selectedPaths.isEmpty()) "长按选择" else "点击继续选择",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            if (images.isEmpty()) {
+                ScreeningEmptyState(
+                    title = "暂无已标记图片",
+                    description = "在轮播中标记图片后会显示在这里，可移动到其他轮播文件夹"
+                )
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(3),
+                    contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp),
+                    horizontalArrangement = Arrangement.spacedBy(9.dp),
+                    verticalArrangement = Arrangement.spacedBy(9.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    items(images, key = { it.path }) { image ->
+                        ScreeningThumbnail(
+                            image = image,
+                            selected = image.path in selectedPaths,
+                            onClick = {
+                                if (selectedPaths.isEmpty()) {
+                                    previewIndex = images.indexOfFirst { it.path == image.path }
+                                } else if (image.path in selectedPaths) {
+                                    selectedPaths.remove(image.path)
+                                } else {
+                                    selectedPaths.add(image.path)
+                                }
+                            },
+                            onLongClick = {
+                                if (image.path !in selectedPaths) selectedPaths.add(image.path)
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun ScreeningScreen() {
+    MarkedScreeningContent()
+}
+
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+@Composable
+private fun LegacyScreeningScreen() {
     val context = LocalContext.current
     val database = remember { com.example.wallpaper.data.AppDatabase.getDatabase(context) }
     val dao = remember { database.wallpaperDao() }
@@ -130,9 +451,6 @@ fun ScreeningScreen() {
 
     var selectedFolderUri by rememberSaveable {
         mutableStateOf(prefs.getString(PREF_SCREENING_FOLDER_URI, null))
-    }
-    var immersivePreview by rememberSaveable {
-        mutableStateOf(prefs.getBoolean(PREF_SCREENING_IMMERSIVE, true))
     }
     var showFolderBrowser by remember { mutableStateOf(false) }
     var scanProgress by remember { mutableStateOf(ScanProgress()) }
@@ -289,16 +607,8 @@ fun ScreeningScreen() {
                     items = images,
                     initialIndex = previewIndex ?: 0,
                     onBack = { previewIndex = null },
-                    initialImmersive = immersivePreview,
-                    onImmersiveChange = {
-                        immersivePreview = it
-                        prefs.edit().putBoolean(PREF_SCREENING_IMMERSIVE, it).apply()
-                    },
-                    onMark = { image ->
-                        scope.launch(Dispatchers.IO) {
-                            dao.markWallpaper(image.path, true)
-                        }
-                    }
+                    onDelete = {},
+                    onMove = {}
                 )
             }
         }
@@ -535,18 +845,30 @@ private fun ScreeningProgressCard(progress: ScanProgress) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ScreeningThumbnail(image: Wallpaper, onClick: () -> Unit) {
+private fun ScreeningThumbnail(
+    image: Wallpaper,
+    selected: Boolean = false,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null
+) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(0.72f)
             .clip(RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick)
+            .then(
+                if (onLongClick == null) {
+                    Modifier.clickable(onClick = onClick)
+                } else {
+                    Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick)
+                }
+            )
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .then(
-                if (image.isMarked) Modifier.border(
-                    BorderStroke(3.dp, MaterialTheme.colorScheme.primary),
+                if (selected) Modifier.border(
+                    BorderStroke(4.dp, MaterialTheme.colorScheme.secondary),
                     RoundedCornerShape(16.dp)
                 ) else Modifier
             )
@@ -557,11 +879,11 @@ private fun ScreeningThumbnail(image: Wallpaper, onClick: () -> Unit) {
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop
         )
-        if (image.isMarked) {
+        if (selected) {
             Surface(
                 modifier = Modifier.align(Alignment.TopEnd).padding(7.dp),
                 shape = CircleShape,
-                color = MaterialTheme.colorScheme.primary
+                color = MaterialTheme.colorScheme.secondary
             ) {
                 Icon(
                     Icons.Default.Check,
@@ -580,47 +902,79 @@ private fun ScreeningPreview(
     items: List<Wallpaper>,
     initialIndex: Int,
     onBack: () -> Unit,
-    initialImmersive: Boolean,
-    onImmersiveChange: (Boolean) -> Unit,
-    onMark: (Wallpaper) -> Unit
+    onDelete: (Wallpaper) -> Unit,
+    onMove: (Wallpaper) -> Unit
 ) {
     if (items.isEmpty()) {
         onBack()
         return
     }
 
+    val context = LocalContext.current
     var index by remember(items) { mutableIntStateOf(initialIndex.coerceIn(0, items.lastIndex)) }
-    var dragDistance by remember { mutableFloatStateOf(0f) }
-    var immersive by rememberSaveable { mutableStateOf(initialImmersive) }
-    ScreeningSystemBars(immersive)
+    val currentItem = items[index]
+    val currentFileName by produceState(
+        initialValue = "未命名图片",
+        key1 = currentItem.path
+    ) {
+        value = withContext(Dispatchers.IO) {
+            displayableFileName(context, currentItem.path)
+        }
+    }
+    var dragDistanceX by remember { mutableFloatStateOf(0f) }
+    var dragDistanceY by remember { mutableFloatStateOf(0f) }
+    ScreeningSystemBars()
     BackHandler(onBack = onBack)
 
     fun next() {
-        index = (index + 1).coerceAtMost(items.lastIndex)
+        index = (index + 1) % items.size
     }
+
+    fun previous() {
+        index = if (index == 0) items.lastIndex else index - 1
+    }
+
+    val modeTextColor = Color.White
+    val modeSecondaryTextColor = Color.White.copy(alpha = 0.72f)
+    val controlSurfaceColor = Color.Black.copy(alpha = 0.48f)
+    val previewModifier = Modifier.fillMaxSize()
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
             .pointerInput(items.size) {
-                detectHorizontalDragGestures(
-                    onHorizontalDrag = { _, amount -> dragDistance += amount },
+                detectDragGestures(
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        dragDistanceX += dragAmount.x
+                        dragDistanceY += dragAmount.y
+                    },
                     onDragEnd = {
+                        val dragDistance = if (abs(dragDistanceX) >= abs(dragDistanceY)) {
+                            dragDistanceX
+                        } else {
+                            dragDistanceY
+                        }
                         when {
                             dragDistance < -80f -> next()
-                            dragDistance > 80f -> index = (index - 1).coerceAtLeast(0)
+                            dragDistance > 80f -> previous()
                         }
-                        dragDistance = 0f
+                        dragDistanceX = 0f
+                        dragDistanceY = 0f
+                    },
+                    onDragCancel = {
+                        dragDistanceX = 0f
+                        dragDistanceY = 0f
                     }
                 )
             }
     ) {
-        ScreeningDesktopMock(items[index], Modifier.fillMaxSize())
+        ScreeningDesktopMock(currentItem, previewModifier)
 
         Surface(
             modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(12.dp),
-            color = Color.Black.copy(alpha = 0.48f),
+            color = controlSurfaceColor,
             shape = RoundedCornerShape(18.dp)
         ) {
             Row(
@@ -628,26 +982,18 @@ private fun ScreeningPreview(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.Default.ArrowBack, contentDescription = "返回", tint = Color.White)
+                    Icon(Icons.Default.ArrowBack, contentDescription = "返回", tint = modeTextColor)
                 }
                 Column(Modifier.weight(1f)) {
-                    Text("${index + 1} / ${items.size}", color = Color.White, fontWeight = FontWeight.SemiBold)
                     Text(
-                        java.io.File(items[index].path.removePrefix("file://")).name,
-                        color = Color.White.copy(alpha = 0.78f),
-                        style = MaterialTheme.typography.labelSmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        currentFileName,
+                        modifier = Modifier.fillMaxWidth(),
+                        color = modeSecondaryTextColor,
+                        style = MaterialTheme.typography.titleSmall,
+                        softWrap = true,
+                        overflow = TextOverflow.Clip
                     )
                 }
-                FilterChip(
-                    selected = immersive,
-                    onClick = {
-                        immersive = !immersive
-                        onImmersiveChange(immersive)
-                    },
-                    label = { Text(if (immersive) "沉浸式" else "普通") }
-                )
             }
         }
 
@@ -661,24 +1007,23 @@ private fun ScreeningPreview(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                Button(
+                    onClick = { onMove(currentItem) },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.Default.FolderIcon, contentDescription = null)
+                    Spacer(Modifier.width(4.dp))
+                    Text("移动到")
+                }
                 OutlinedButton(
                     onClick = {
-                        onMark(items[index])
-                        next()
+                        onDelete(currentItem)
                     },
                     modifier = Modifier.weight(1f)
                 ) {
-                    Icon(Icons.Default.Star, contentDescription = null, tint = Color.White)
+                    Icon(Icons.Default.Delete, contentDescription = null, tint = modeTextColor)
                     Spacer(Modifier.width(4.dp))
-                    Text("待删", color = Color.White)
-                }
-                Button(
-                    onClick = ::next,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(Icons.Default.Check, contentDescription = null)
-                    Spacer(Modifier.width(4.dp))
-                    Text("保留")
+                    Text("删除", color = modeTextColor)
                 }
             }
         }
@@ -905,22 +1250,15 @@ private fun DesktopRasterDockIcon(px: (Float) -> Dp, x: Float, y: Float, asset: 
 }
 
 @Composable
-private fun ScreeningSystemBars(immersive: Boolean) {
+private fun ScreeningSystemBars() {
     val context = LocalContext.current
     val activity = context as? Activity ?: return
-    DisposableEffect(immersive) {
+    DisposableEffect(Unit) {
         val window = activity.window
         val controller = WindowInsetsControllerCompat(window, window.decorView)
-        if (immersive) {
-            WindowCompat.setDecorFitsSystemWindows(window, false)
-            controller.hide(WindowInsetsCompat.Type.systemBars())
-            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        } else {
-            WindowCompat.setDecorFitsSystemWindows(window, true)
-            controller.show(WindowInsetsCompat.Type.systemBars())
-            controller.isAppearanceLightStatusBars = true
-            controller.isAppearanceLightNavigationBars = true
-        }
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        controller.hide(WindowInsetsCompat.Type.systemBars())
+        controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         onDispose {
             WindowCompat.setDecorFitsSystemWindows(window, true)
             controller.show(WindowInsetsCompat.Type.systemBars())

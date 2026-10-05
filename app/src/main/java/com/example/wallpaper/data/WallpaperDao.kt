@@ -8,6 +8,9 @@ interface WallpaperDao {
     @Query("SELECT * FROM wallpapers WHERE isMarked = 1")
     fun getMarkedWallpapers(): Flow<List<Wallpaper>>
 
+    @Query("SELECT path FROM wallpapers WHERE isMarked = 1")
+    suspend fun getMarkedPaths(): List<String>
+
     @Query("SELECT * FROM wallpapers WHERE folderId = :folderId ORDER BY path ASC")
     fun getWallpapersByFolder(folderId: Long): Flow<List<Wallpaper>>
 

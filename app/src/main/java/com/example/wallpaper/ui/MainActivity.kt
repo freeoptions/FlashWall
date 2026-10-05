@@ -58,9 +58,11 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.graphics.drawable.toBitmap
@@ -78,6 +80,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 private const val PREF_HIDE_FROM_RECENTS = "hide_from_recents"
+// 兼容旧版不可达的标记页逻辑；当前入口已统一为筛选页，设置页不再暴露该配置。
 private const val PREF_MARKED_MOVE_TARGET_PATH = "marked_move_target_path"
 private const val DEFAULT_INTERVAL_SECONDS = 5
 
@@ -146,11 +149,35 @@ private fun removeCurrentTaskFromRecents(context: Context) {
 fun MainApp() {
     var selectedTab by remember { mutableIntStateOf(0) }
 
+    BackHandler(enabled = selectedTab != 0) {
+        selectedTab = 0
+    }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            if (selectedTab == 0) {
+                CenterAlignedTopAppBar(
+                    title = {
+                        Text(
+                            "FlashWall",
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                letterSpacing = 0.25.sp
+                            ),
+                            color = FlashWallColors.ink,
+                            maxLines = 1
+                        )
+                    },
+                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                        containerColor = Color.White
+                    )
+                )
+            }
+        },
         bottomBar = {
             NavigationBar(
-                containerColor = MaterialTheme.colorScheme.background.copy(alpha = 0.96f),
+                containerColor = Color.White.copy(alpha = 0.96f),
                 tonalElevation = 0.dp
             ) {
                 NavigationBarItem(
@@ -160,10 +187,10 @@ fun MainApp() {
                     label = { Text("文件夹") },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = MaterialTheme.colorScheme.primary,
-                        selectedTextColor = MaterialTheme.colorScheme.onBackground,
+                        selectedTextColor = FlashWallColors.ink,
                         indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        unselectedIconColor = FlashWallColors.muted,
+                        unselectedTextColor = FlashWallColors.muted
                     )
                 )
                 NavigationBarItem(
@@ -173,36 +200,23 @@ fun MainApp() {
                     label = { Text("筛选") },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = MaterialTheme.colorScheme.primary,
-                        selectedTextColor = MaterialTheme.colorScheme.onBackground,
+                        selectedTextColor = FlashWallColors.ink,
                         indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        unselectedIconColor = FlashWallColors.muted,
+                        unselectedTextColor = FlashWallColors.muted
                     )
                 )
                 NavigationBarItem(
                     selected = selectedTab == 2,
                     onClick = { selectedTab = 2 },
-                    icon = { Icon(Icons.Default.FavoriteBorder, contentDescription = "标记中心") },
-                    label = { Text("标记") },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = MaterialTheme.colorScheme.primary,
-                        selectedTextColor = MaterialTheme.colorScheme.onBackground,
-                        indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 3,
-                    onClick = { selectedTab = 3 },
                     icon = { Icon(Icons.Default.Settings, contentDescription = "设置") },
                     label = { Text("设置") },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = MaterialTheme.colorScheme.primary,
-                        selectedTextColor = MaterialTheme.colorScheme.onBackground,
+                        selectedTextColor = FlashWallColors.ink,
                         indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        unselectedIconColor = FlashWallColors.muted,
+                        unselectedTextColor = FlashWallColors.muted
                     )
                 )
             }
@@ -212,8 +226,7 @@ fun MainApp() {
             when (selectedTab) {
                 0 -> FolderListScreen()
                 1 -> ScreeningScreen()
-                2 -> MarkedGalleryScreen()
-                3 -> SettingsScreen()
+                2 -> SettingsScreen()
             }
         }
     }
@@ -336,18 +349,17 @@ fun FolderListScreen() {
                 .fillMaxSize()
                 .padding(horizontal = 16.dp)
         ) {
-            ScreenHeader(
-                title = "文件夹",
-                subtitle = "管理壁纸来源，决定轮播内容"
-            )
+            Spacer(Modifier.height(12.dp))
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 12.dp),
                 shape = RoundedCornerShape(28.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
+                    containerColor = FlashWallColors.hero.copy(alpha = 0.72f)
+                ),
+                border = BorderStroke(1.dp, FlashWallColors.line),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
                 Row(
                     modifier = Modifier.padding(20.dp),
@@ -373,11 +385,6 @@ fun FolderListScreen() {
                             "$totalMarked 张图片已标记",
                             style = MaterialTheme.typography.headlineSmall,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                        Text(
-                            "系统毫秒级索引 · 无需同步",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f)
                         )
                     }
                 }
@@ -457,11 +464,6 @@ fun FolderListScreen() {
                                         "还没有文件夹",
                                         style = MaterialTheme.typography.titleMedium
                                     )
-                                    Text(
-                                        "添加一个目录，FlashWall 就能开始轮播",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
                                 }
                             }
                         }
@@ -496,11 +498,6 @@ fun FolderListScreen() {
                                 )
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(folder.name, color = MaterialTheme.colorScheme.onSurface)
-                                    Text(
-                                        "轮播来源",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
                                 }
 
                                 IconButton(onClick = {
@@ -782,18 +779,7 @@ fun FolderBrowserDialog(
                 )
             )
         }
-        var markedMoveTargetPath by remember {
-            mutableStateOf(
-                prefs.getString(
-                    PREF_MARKED_MOVE_TARGET_PATH,
-                    null
-                )
-            )
-        }
         var exportFolderPath by remember { mutableStateOf(prefs.getString("export_folder", null)) }
-        val readableMarkedMoveTargetPath = remember(markedMoveTargetPath) {
-            displayableDirectoryPath(context, markedMoveTargetPath)
-        }
         val readableExportFolderPath = remember(exportFolderPath) {
             displayableDirectoryPath(context, exportFolderPath)
         }
@@ -837,10 +823,6 @@ fun FolderBrowserDialog(
                                 prefs.getString("selected_border_color", "yellow")
                             )
                             put("launcher_icon_uri", prefs.getString("launcher_icon_uri", null))
-                            put(
-                                PREF_MARKED_MOVE_TARGET_PATH,
-                                prefs.getString(PREF_MARKED_MOVE_TARGET_PATH, null)
-                            )
                             put("export_folder", prefs.getString("export_folder", null))
                             put("export_time", System.currentTimeMillis())
                             put("device", android.os.Build.MODEL)
@@ -912,9 +894,6 @@ fun FolderBrowserDialog(
                                 if (json.has("launcher_icon_uri")) putString(
                                     "launcher_icon_uri",
                                     json.optString("launcher_icon_uri").ifEmpty { null })
-                                if (json.has(PREF_MARKED_MOVE_TARGET_PATH)) putString(
-                                    PREF_MARKED_MOVE_TARGET_PATH,
-                                    json.optString(PREF_MARKED_MOVE_TARGET_PATH).ifEmpty { null })
                                 if (json.has("export_folder")) putString(
                                     "export_folder",
                                     json.optString("export_folder").ifEmpty { null })
@@ -928,8 +907,6 @@ fun FolderBrowserDialog(
                                 selectedBorderColorKey =
                                     prefs.getString("selected_border_color", "yellow") ?: "yellow"
                                 launcherIconUri = prefs.getString("launcher_icon_uri", null)
-                                markedMoveTargetPath =
-                                    prefs.getString(PREF_MARKED_MOVE_TARGET_PATH, null)
                                 exportFolderPath = prefs.getString("export_folder", null)
                                 Toast.makeText(
                                     context,
@@ -955,44 +932,34 @@ fun FolderBrowserDialog(
                 .verticalScroll(rememberScrollState())
         ) {
             ScreenHeader(
-                title = "设置",
-                subtitle = "调整轮播节奏、显示方式与备份目录"
+                title = "设置"
             )
-            Text(
-                "基础设置",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(horizontal = 20.dp)
-            )
-            Spacer(Modifier.height(10.dp))
 
             Card(
                 modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth(),
-                shape = RoundedCornerShape(32.dp),
+                shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.62f)
+                    containerColor = MaterialTheme.colorScheme.surface
                 ),
-                border = BorderStroke(
-                    1.dp,
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                )
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
-                Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 22.dp)) {
+                Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 18.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Surface(
-                            modifier = Modifier.size(48.dp),
-                            shape = RoundedCornerShape(16.dp),
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                            modifier = Modifier.size(42.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     Icons.Default.Refresh,
                                     contentDescription = null,
-                                    modifier = Modifier.size(24.dp),
+                                    modifier = Modifier.size(21.dp),
                                     tint = MaterialTheme.colorScheme.primary
                                 )
                             }
@@ -1003,26 +970,21 @@ fun FolderBrowserDialog(
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
-                            Text(
-                                "每隔一段时间切换下一张壁纸",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f)
-                            )
                         }
                         Surface(
-                            shape = RoundedCornerShape(14.dp),
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer
                         ) {
                             Text(
                                 "${intervalSeconds.toInt()} 秒",
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.primary
                             )
                         }
                     }
 
-                    Spacer(Modifier.height(18.dp))
+                    Spacer(Modifier.height(12.dp))
 
                     Slider(
                         value = intervalSeconds,
@@ -1035,7 +997,7 @@ fun FolderBrowserDialog(
                         colors = SliderDefaults.colors(
                             thumbColor = MaterialTheme.colorScheme.primary,
                             activeTrackColor = MaterialTheme.colorScheme.primary,
-                            inactiveTrackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.16f)
+                            inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant
                         )
                     )
                     Row(
@@ -1045,48 +1007,42 @@ fun FolderBrowserDialog(
                         Text(
                             "4 秒",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.64f)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
                             "300 秒",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.64f)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
 
-                    Text(
-                        "快速设置",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f),
-                        modifier = Modifier.padding(top = 18.dp)
-                    )
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(12.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        listOf(4, 5, 10).forEach { quickInterval ->
+                        listOf(4, 10, 30, 60).forEach { quickInterval ->
                             val isSelected = intervalSeconds.toInt() == quickInterval
                             Surface(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(44.dp)
+                                    .height(40.dp)
                                     .clickable {
                                         intervalSeconds = quickInterval.toFloat()
                                         prefs.edit().putInt("interval", quickInterval).apply()
                                     },
-                                shape = RoundedCornerShape(14.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 color = if (isSelected) {
                                     MaterialTheme.colorScheme.primary
                                 } else {
-                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.66f)
+                                    MaterialTheme.colorScheme.surfaceVariant
                                 },
                                 border = BorderStroke(
                                     1.dp,
                                     if (isSelected) {
                                         MaterialTheme.colorScheme.primary
                                     } else {
-                                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.12f)
+                                        MaterialTheme.colorScheme.outlineVariant
                                     }
                                 )
                             ) {
@@ -1105,7 +1061,7 @@ fun FolderBrowserDialog(
                         }
                     }
 
-                    Spacer(Modifier.height(14.dp))
+                    Spacer(Modifier.height(10.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1126,10 +1082,9 @@ fun FolderBrowserDialog(
                                     prefs.edit().putInt("interval", intervalSeconds.toInt()).apply()
                                 }
                             },
-                            modifier = Modifier.width(132.dp),
+                            modifier = Modifier.width(116.dp),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true,
-                            label = { Text("精确设置") },
                             trailingIcon = {
                                 Text(
                                     "秒",
@@ -1137,8 +1092,8 @@ fun FolderBrowserDialog(
                                     style = MaterialTheme.typography.labelMedium
                                 )
                             },
-                            shape = RoundedCornerShape(18.dp),
-                            textStyle = MaterialTheme.typography.bodyLarge
+                            shape = RoundedCornerShape(14.dp),
+                            textStyle = MaterialTheme.typography.titleMedium
                         )
 
                         IconButton(onClick = {
@@ -1149,14 +1104,7 @@ fun FolderBrowserDialog(
                 }
             }
 
-            Spacer(Modifier.height(24.dp))
-            Text(
-                "播放行为",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(horizontal = 20.dp)
-            )
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(20.dp))
 
             Card(
                 modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth(),
@@ -1291,48 +1239,6 @@ fun FolderBrowserDialog(
                         thickness = 0.5.dp,
                         color = MaterialTheme.colorScheme.outlineVariant
                     )
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        var showMarkedMoveFolderBrowser by remember { mutableStateOf(false) }
-                        Text("标记移动目录", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            readableMarkedMoveTargetPath ?: "未设置，点击移动时会提示选择",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (markedMoveTargetPath != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-                        )
-                        Row(
-                            modifier = Modifier.padding(top = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Button(
-                                onClick = { showMarkedMoveFolderBrowser = true },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("选择目录")
-                            }
-                            if (markedMoveTargetPath != null) {
-                                OutlinedButton(
-                                    onClick = {
-                                        markedMoveTargetPath = null
-                                        prefs.edit().remove(PREF_MARKED_MOVE_TARGET_PATH).apply()
-                                    }
-                                ) {
-                                    Text("清除")
-                                }
-                            }
-                        }
-
-                        if (showMarkedMoveFolderBrowser) {
-                            FolderBrowserDialog(
-                                onDismiss = { showMarkedMoveFolderBrowser = false },
-                                onSelect = { path ->
-                                    markedMoveTargetPath = path
-                                    prefs.edit().putString(PREF_MARKED_MOVE_TARGET_PATH, path)
-                                        .apply()
-                                    showMarkedMoveFolderBrowser = false
-                                }
-                            )
-                        }
-                    }
                 }
             }
 
@@ -1557,6 +1463,14 @@ fun FolderBrowserDialog(
             displayableDirectoryPath(context, rememberedTargetPath)
         }
 
+        LaunchedEffect(rememberedTargetPath) {
+            rememberedTargetPath?.takeIf { it.isNotBlank() }?.let { targetPath ->
+                withContext(Dispatchers.IO) {
+                    syncMarkedMoveDirectory(context, db.wallpaperDao(), targetPath)
+                }
+            }
+        }
+
         fun performMove(targetPath: String) {
             scope.launch(Dispatchers.IO) {
                 isMoving = true
@@ -1574,6 +1488,8 @@ fun FolderBrowserDialog(
                             Log.e("Move", "Error moving ${wp.path}: ${e.message}")
                         }
                     }
+                    // 移动流程会先清理旧路径记录，这里立即从目标目录恢复待删除标记。
+                    syncMarkedMoveDirectory(context, db.wallpaperDao(), targetPath)
                     withContext(Dispatchers.Main) {
                         selectedPaths.clear()
                         Toast.makeText(context, "批量移动完成", Toast.LENGTH_SHORT).show()

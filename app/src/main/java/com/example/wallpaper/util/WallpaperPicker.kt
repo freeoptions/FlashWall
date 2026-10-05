@@ -49,6 +49,10 @@ class WallpaperPicker(private val context: Context) {
             val selectedFolders = db.wallpaperDao().getSelectedFolders()
             if (selectedFolders.isEmpty()) return@withContext null
 
+            val markedPathKeys = db.wallpaperDao().getMarkedPaths()
+                .flatMap(::pathKeys)
+                .toSet()
+
             val selection = StringBuilder()
             val selectionArgs = mutableListOf<String>()
 
@@ -81,7 +85,7 @@ class WallpaperPicker(private val context: Context) {
                     visited.add(randomIndex)
                     if (cursor.moveToPosition(randomIndex)) {
                         val path = cursor.getString(dataColumn)
-                        if (isExistingImagePath(path)) {
+                        if (isExistingImagePath(path) && pathKeys(path).none { it in markedPathKeys }) {
                             return@withContext toCoilFilePath(path)
                         }
                     }
@@ -91,7 +95,7 @@ class WallpaperPicker(private val context: Context) {
                     if (index in visited) continue
                     if (cursor.moveToPosition(index)) {
                         val path = cursor.getString(dataColumn)
-                        if (isExistingImagePath(path)) {
+                        if (isExistingImagePath(path) && pathKeys(path).none { it in markedPathKeys }) {
                             return@withContext toCoilFilePath(path)
                         }
                     }
@@ -105,6 +109,12 @@ class WallpaperPicker(private val context: Context) {
         if (path.isNullOrBlank()) return false
         val file = File(path)
         return file.exists() && file.isFile && file.canRead()
+    }
+
+    private fun pathKeys(path: String): Set<String> {
+        val rawPath = path.removePrefix("file://")
+        val canonicalPath = runCatching { File(rawPath).canonicalPath }.getOrDefault(rawPath)
+        return setOf(path, rawPath, canonicalPath, "file://$rawPath", "file://$canonicalPath")
     }
 
     private fun toCoilFilePath(path: String): String {
