@@ -58,7 +58,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -137,9 +136,14 @@ private fun MarkedScreeningContent() {
     var showTargetFolderPicker by remember { mutableStateOf(false) }
     var pendingMoveItems by remember { mutableStateOf<List<Wallpaper>>(emptyList()) }
 
+    BackHandler(enabled = selectedPaths.isNotEmpty() && previewIndex == null && !showTargetFolderPicker) {
+        selectedPaths.clear()
+    }
+
     LaunchedEffect(images) {
         val availablePaths = images.mapTo(hashSetOf()) { it.path }
         selectedPaths.retainAll(availablePaths)
+        if (images.isEmpty()) previewIndex = null
     }
 
     fun moveItemsTo(targetFolder: Folder, itemsToMove: List<Wallpaper>) {
@@ -216,12 +220,6 @@ private fun MarkedScreeningContent() {
             } finally {
                 withContext(Dispatchers.Main) {
                     selectedPaths.removeAll(pathsToDelete.map { it.path }.toSet())
-                    if (deletedCount > 0) {
-                        val currentPreviewPath = previewIndex?.let { images.getOrNull(it)?.path }
-                        if (pathsToDelete.any { it.path == currentPreviewPath }) {
-                            previewIndex = null
-                        }
-                    }
                     isMoving = false
                     val message = if (deletedCount == pathsToDelete.size) {
                         "已删除 $deletedCount 张图片"
@@ -251,7 +249,40 @@ private fun MarkedScreeningContent() {
         moveItemsTo(targetFolder, itemsToMove)
     }
 
+    if (previewIndex != null && images.isNotEmpty()) {
+        Dialog(
+            onDismissRequest = { previewIndex = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(Modifier.fillMaxSize(), color = Color.Black) {
+                ScreeningPreview(
+                    items = images,
+                    initialIndex = previewIndex ?: 0,
+                    onBack = { previewIndex = null },
+                    onDelete = { image -> deleteItems(listOf(image)) },
+                    onMove = { image -> requestMove(listOf(image)) },
+                    isBusy = isMoving,
+                    onIndexChanged = { previewIndex = it }
+                )
+            }
+        }
+    }
+
+    // 后创建的窗口处于预览之上，返回只关闭目录选择，不关闭预览。
     if (showTargetFolderPicker) {
+        val sourceFolderIds by produceState(
+            initialValue = emptySet<Long>(),
+            key1 = pendingMoveItems,
+            key2 = rotationFolders
+        ) {
+            value = withContext(Dispatchers.IO) {
+                rotationFolders.filter { folder ->
+                    pendingMoveItems.any { image ->
+                        isWallpaperInDirectory(context, image.path, folder.uri)
+                    }
+                }.mapTo(hashSetOf()) { it.id }
+            }
+        }
         AlertDialog(
             onDismissRequest = { if (!isMoving) showTargetFolderPicker = false },
             title = { Text("移动到轮播文件夹") },
@@ -271,12 +302,15 @@ private fun MarkedScreeningContent() {
                                     .padding(vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                RadioButton(
-                                    selected = false,
-                                    onClick = {
-                                        confirmPendingMove(folder)
+                                Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                                    if (folder.id in sourceFolderIds) {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = "图片当前所在文件夹",
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
                                     }
-                                )
+                                }
                                 Column(Modifier.weight(1f)) {
                                     Text(folder.name, style = MaterialTheme.typography.titleSmall)
                                     Text(
@@ -303,25 +337,6 @@ private fun MarkedScreeningContent() {
         )
     }
 
-    if (previewIndex != null && images.isNotEmpty()) {
-        Dialog(
-            onDismissRequest = { previewIndex = null },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            Surface(Modifier.fillMaxSize(), color = Color.Black) {
-                ScreeningPreview(
-                    items = images,
-                    initialIndex = previewIndex ?: 0,
-                    onBack = { previewIndex = null },
-                    onDelete = { image -> deleteItems(listOf(image)) },
-                    onMove = { image ->
-                        requestMove(listOf(image))
-                    }
-                )
-            }
-        }
-    }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -345,14 +360,6 @@ private fun MarkedScreeningContent() {
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        OutlinedButton(
-                            onClick = { selectedPaths.clear() },
-                            enabled = !isMoving,
-                            modifier = Modifier.weight(0.8f),
-                            shape = RoundedCornerShape(16.dp)
-                        ) {
-                            Text("取消选择")
-                        }
                         Button(
                             onClick = {
                                 requestMove(images.filter { it.path in selectedPaths })
@@ -364,6 +371,14 @@ private fun MarkedScreeningContent() {
                             Icon(Icons.Default.FolderIcon, contentDescription = null)
                             Spacer(Modifier.width(6.dp))
                             Text(if (isMoving) "移动中…" else "移动到轮播文件夹")
+                        }
+                        OutlinedButton(
+                            onClick = { selectedPaths.clear() },
+                            enabled = !isMoving,
+                            modifier = Modifier.weight(0.8f),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Text("取消选择")
                         }
                     }
                 }
@@ -903,39 +918,45 @@ private fun ScreeningPreview(
     initialIndex: Int,
     onBack: () -> Unit,
     onDelete: (Wallpaper) -> Unit,
-    onMove: (Wallpaper) -> Unit
+    onMove: (Wallpaper) -> Unit,
+    isBusy: Boolean = false,
+    onIndexChanged: (Int) -> Unit = {}
 ) {
     if (items.isEmpty()) {
-        onBack()
+        LaunchedEffect(Unit) { onBack() }
         return
     }
 
-    val context = LocalContext.current
-    var index by remember(items) { mutableIntStateOf(initialIndex.coerceIn(0, items.lastIndex)) }
-    val currentItem = items[index]
-    val currentFileName by produceState(
-        initialValue = "未命名图片",
-        key1 = currentItem.path
-    ) {
-        value = withContext(Dispatchers.IO) {
-            displayableFileName(context, currentItem.path)
-        }
+    var index by remember { mutableIntStateOf(initialIndex.coerceIn(0, items.lastIndex)) }
+    var previewPath by remember { mutableStateOf(items[index].path) }
+    // 保留当前图片；它被删除时沿用原位置看下一张，删掉末张则回到前一张。
+    val retainedIndex = items.indexOfFirst { it.path == previewPath }
+    val currentIndex = if (retainedIndex >= 0) retainedIndex else index.coerceIn(0, items.lastIndex)
+    val currentItem = items[currentIndex]
+    var pendingDelete by remember { mutableStateOf<Wallpaper?>(null) }
+    LaunchedEffect(items, currentItem.path) {
+        index = currentIndex
+        previewPath = currentItem.path
+        onIndexChanged(currentIndex)
     }
     var dragDistanceX by remember { mutableFloatStateOf(0f) }
     var dragDistanceY by remember { mutableFloatStateOf(0f) }
     ScreeningSystemBars()
-    BackHandler(onBack = onBack)
+    BackHandler {
+        if (pendingDelete != null) pendingDelete = null else onBack()
+    }
 
     fun next() {
-        index = (index + 1) % items.size
+        index = (currentIndex + 1) % items.size
+        previewPath = items[index].path
     }
 
     fun previous() {
-        index = if (index == 0) items.lastIndex else index - 1
+        index = if (currentIndex == 0) items.lastIndex else currentIndex - 1
+        previewPath = items[index].path
     }
 
     val modeTextColor = Color.White
-    val modeSecondaryTextColor = Color.White.copy(alpha = 0.72f)
     val controlSurfaceColor = Color.Black.copy(alpha = 0.48f)
     val previewModifier = Modifier.fillMaxSize()
 
@@ -943,7 +964,7 @@ private fun ScreeningPreview(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .pointerInput(items.size) {
+            .pointerInput(items, currentIndex, isBusy) {
                 detectDragGestures(
                     onDrag = { change, dragAmount ->
                         change.consume()
@@ -957,6 +978,7 @@ private fun ScreeningPreview(
                             dragDistanceY
                         }
                         when {
+                            isBusy -> Unit
                             dragDistance < -80f -> next()
                             dragDistance > 80f -> previous()
                         }
@@ -973,27 +995,12 @@ private fun ScreeningPreview(
         ScreeningDesktopMock(currentItem, previewModifier)
 
         Surface(
-            modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(12.dp),
+            modifier = Modifier.align(Alignment.TopStart).padding(12.dp),
             color = controlSurfaceColor,
-            shape = RoundedCornerShape(18.dp)
+            shape = CircleShape
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.Default.ArrowBack, contentDescription = "返回", tint = modeTextColor)
-                }
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        currentFileName,
-                        modifier = Modifier.fillMaxWidth(),
-                        color = modeSecondaryTextColor,
-                        style = MaterialTheme.typography.titleSmall,
-                        softWrap = true,
-                        overflow = TextOverflow.Clip
-                    )
-                }
+            IconButton(onClick = onBack) {
+                Icon(Icons.Default.ArrowBack, contentDescription = "返回", tint = modeTextColor)
             }
         }
 
@@ -1009,6 +1016,7 @@ private fun ScreeningPreview(
             ) {
                 Button(
                     onClick = { onMove(currentItem) },
+                    enabled = !isBusy,
                     modifier = Modifier.weight(1f)
                 ) {
                     Icon(Icons.Default.FolderIcon, contentDescription = null)
@@ -1017,8 +1025,9 @@ private fun ScreeningPreview(
                 }
                 OutlinedButton(
                     onClick = {
-                        onDelete(currentItem)
+                        pendingDelete = currentItem
                     },
+                    enabled = !isBusy,
                     modifier = Modifier.weight(1f)
                 ) {
                     Icon(Icons.Default.Delete, contentDescription = null, tint = modeTextColor)
@@ -1027,6 +1036,28 @@ private fun ScreeningPreview(
                 }
             }
         }
+    }
+
+    pendingDelete?.let { image ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("确认删除") },
+            text = { Text("确定删除这张图片吗？删除后无法恢复。") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingDelete = null
+                        onDelete(image)
+                    },
+                    enabled = !isBusy
+                ) {
+                    Text("删除", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = null }) { Text("取消") }
+            }
+        )
     }
 }
 

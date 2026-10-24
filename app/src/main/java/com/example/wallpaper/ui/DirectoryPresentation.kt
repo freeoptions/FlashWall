@@ -3,6 +3,7 @@ package com.example.wallpaper.ui
 import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
+import android.os.Build
 import android.os.Environment
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
@@ -192,6 +193,60 @@ internal fun isDirectoryAvailable(context: Context, rawDirectory: String): Boole
 
     val directoryPath = filePathOf(rawDirectory, uri) ?: return false
     return File(directoryPath).isDirectory
+}
+
+/** Checks the real location, including subfolders, rather than a possibly stale folderId. */
+internal fun isWallpaperInDirectory(context: Context, rawPath: String, rawDirectory: String): Boolean {
+    val imageUri = runCatching { Uri.parse(rawPath) }.getOrNull() ?: return false
+    val directoryUri = runCatching { Uri.parse(rawDirectory) }.getOrNull() ?: return false
+
+    fun localFile(rawValue: String, uri: Uri): File? {
+        filePathOf(rawValue, uri)?.let { return File(it) }
+        // Only Android's external-storage provider has this known filesystem mapping.
+        if (uri.authority != "com.android.externalstorage.documents") return null
+        val documentId = runCatching {
+            if (DocumentsContract.isDocumentUri(context, uri)) {
+                DocumentsContract.getDocumentId(uri)
+            } else {
+                DocumentsContract.getTreeDocumentId(uri)
+            }
+        }.getOrNull() ?: return null
+        val parts = documentId.split(':', limit = 2)
+        if (parts.size != 2 || parts[0] != "primary") return null
+        return File(Environment.getExternalStorageDirectory(), parts[1])
+    }
+
+    val imageFile = localFile(rawPath, imageUri)
+    val directoryFile = localFile(rawDirectory, directoryUri)
+    if (imageFile != null && directoryFile != null) {
+        return runCatching {
+            val directoryPath = directoryFile.canonicalPath.trimEnd(File.separatorChar)
+            imageFile.canonicalPath.startsWith(directoryPath + File.separator)
+        }.getOrDefault(false)
+    }
+
+    // Other document providers decide ancestry themselves; opaque IDs are not file paths.
+    if (imageUri.scheme != ContentResolver.SCHEME_CONTENT ||
+        directoryUri.scheme != ContentResolver.SCHEME_CONTENT ||
+        imageUri.authority != directoryUri.authority
+    ) return false
+    return runCatching {
+        val parentUri = if (DocumentsContract.isTreeUri(directoryUri)) {
+            DocumentsContract.buildDocumentUriUsingTree(
+                directoryUri,
+                DocumentsContract.getTreeDocumentId(directoryUri)
+            )
+        } else {
+            directoryUri
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            DocumentsContract.isChildDocument(context.contentResolver, parentUri, imageUri)
+        } else {
+            val parentId = DocumentsContract.getDocumentId(parentUri)
+            DocumentsContract.findDocumentPath(context.contentResolver, imageUri)
+                ?.path?.dropLast(1)?.contains(parentId) == true
+        }
+    }.getOrDefault(false)
 }
 
 /**

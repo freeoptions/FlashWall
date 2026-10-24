@@ -631,7 +631,8 @@ fun FolderBrowserDialog(
         onSelect: (String) -> Unit
     ) {
         val context = LocalContext.current
-        var currentPath by remember { mutableStateOf(Environment.getExternalStorageDirectory().absolutePath) }
+        val rootPath = remember { Environment.getExternalStorageDirectory().absolutePath }
+        var currentPath by remember { mutableStateOf(rootPath) }
         val currentFile = File(currentPath)
         val files = remember(currentPath) {
             currentFile.listFiles { file -> file.isDirectory && !file.name.startsWith(".") }
@@ -639,8 +640,17 @@ fun FolderBrowserDialog(
         }
 
         Dialog(
-            onDismissRequest = onDismiss,
-            properties = DialogProperties(usePlatformDefaultWidth = false)
+            onDismissRequest = {
+                if (currentPath != rootPath) {
+                    currentFile.parent?.let { currentPath = it }
+                } else {
+                    onDismiss()
+                }
+            },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                dismissOnClickOutside = false
+            )
         ) {
             Surface(
                 modifier = Modifier
@@ -668,7 +678,7 @@ fun FolderBrowserDialog(
                     }
 
                     LazyColumn(modifier = Modifier.weight(1f)) {
-                        if (currentPath != Environment.getExternalStorageDirectory().absolutePath) {
+                        if (currentPath != rootPath) {
                             item {
                                 ListItem(
                                     headlineContent = { Text("../ (返回上级)") },
