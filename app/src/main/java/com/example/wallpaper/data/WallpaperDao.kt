@@ -32,6 +32,15 @@ interface WallpaperDao {
     @Query("UPDATE wallpapers SET isMarked = :isMarked WHERE path = :path")
     suspend fun markWallpaper(path: String, isMarked: Boolean)
 
+    @Query("UPDATE wallpapers SET isMarked = 0 WHERE path IN (:paths)")
+    suspend fun clearWallpaperMarks(paths: List<String>)
+
+    @Transaction
+    suspend fun unmarkWallpapers(paths: List<String>) {
+        // 分批限制 SQL 参数数量，整批完成后再通知列表刷新。
+        paths.distinct().chunked(500).forEach { clearWallpaperMarks(it) }
+    }
+
     @Query("SELECT COUNT(*) FROM wallpapers WHERE isMarked = 1")
     fun getTotalMarkedFlow(): Flow<Int>
 

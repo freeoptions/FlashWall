@@ -108,6 +108,7 @@ import com.example.wallpaper.data.Folder
 import com.example.wallpaper.data.Wallpaper
 import com.example.wallpaper.util.ScanProgress
 import com.example.wallpaper.util.ScreeningRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.flowOf
@@ -133,6 +134,8 @@ private fun MarkedScreeningContent() {
     val rotationFolders by dao.getAllFolders().collectAsState(initial = emptyList())
     val selectedPaths = remember { mutableStateListOf<String>() }
     var isMoving by remember { mutableStateOf(false) }
+    var isUnmarking by remember { mutableStateOf(false) }
+    val isBusy = isMoving || isUnmarking
     var showTargetFolderPicker by remember { mutableStateOf(false) }
     var pendingMoveItems by remember { mutableStateOf<List<Wallpaper>>(emptyList()) }
 
@@ -147,7 +150,7 @@ private fun MarkedScreeningContent() {
     }
 
     fun moveItemsTo(targetFolder: Folder, itemsToMove: List<Wallpaper>) {
-        if (isMoving) return
+        if (isBusy) return
         val pathsToMove = itemsToMove.distinctBy { it.path }
         if (pathsToMove.isEmpty()) return
 
@@ -200,7 +203,7 @@ private fun MarkedScreeningContent() {
     }
 
     fun deleteItems(itemsToDelete: List<Wallpaper>) {
-        if (isMoving) return
+        if (isBusy) return
         val pathsToDelete = itemsToDelete.distinctBy { it.path }
         if (pathsToDelete.isEmpty()) return
 
@@ -232,8 +235,33 @@ private fun MarkedScreeningContent() {
         }
     }
 
+    fun unmarkItems(itemsToUnmark: List<Wallpaper>) {
+        if (isBusy) return
+        val paths = itemsToUnmark.map { it.path }.distinct()
+        if (paths.isEmpty()) return
+
+        isUnmarking = true
+        scope.launch {
+            try {
+                withContext(Dispatchers.IO) { dao.unmarkWallpapers(paths) }
+                selectedPaths.removeAll(paths.toSet())
+                android.widget.Toast.makeText(
+                    context, "已取消 ${paths.size} 张图片的标记", android.widget.Toast.LENGTH_SHORT
+                ).show()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                android.widget.Toast.makeText(
+                    context, "取消标记失败，请重试", android.widget.Toast.LENGTH_SHORT
+                ).show()
+            } finally {
+                isUnmarking = false
+            }
+        }
+    }
+
     fun requestMove(itemsToMove: List<Wallpaper>) {
-        if (isMoving || itemsToMove.isEmpty()) return
+        if (isBusy || itemsToMove.isEmpty()) return
         pendingMoveItems = itemsToMove.distinctBy { it.path }
         showTargetFolderPicker = true
     }
@@ -261,7 +289,8 @@ private fun MarkedScreeningContent() {
                     onBack = { previewIndex = null },
                     onDelete = { image -> deleteItems(listOf(image)) },
                     onMove = { image -> requestMove(listOf(image)) },
-                    isBusy = isMoving,
+                    onUnmark = { image -> unmarkItems(listOf(image)) },
+                    isBusy = isBusy,
                     onIndexChanged = { previewIndex = it }
                 )
             }
@@ -284,7 +313,7 @@ private fun MarkedScreeningContent() {
             }
         }
         AlertDialog(
-            onDismissRequest = { if (!isMoving) showTargetFolderPicker = false },
+            onDismissRequest = { if (!isBusy) showTargetFolderPicker = false },
             title = { Text("移动到轮播文件夹") },
             text = {
                 if (rotationFolders.isEmpty()) {
@@ -329,7 +358,7 @@ private fun MarkedScreeningContent() {
             confirmButton = {
                 TextButton(
                     onClick = { showTargetFolderPicker = false },
-                    enabled = !isMoving
+                    enabled = !isBusy
                 ) {
                     Text("取消")
                 }
@@ -353,32 +382,42 @@ private fun MarkedScreeningContent() {
                     shadowElevation = 8.dp,
                     color = MaterialTheme.colorScheme.surface
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Button(
-                            onClick = {
-                                requestMove(images.filter { it.path in selectedPaths })
-                            },
-                            enabled = !isMoving,
-                            modifier = Modifier.weight(1.4f),
-                            shape = RoundedCornerShape(16.dp)
-                        ) {
-                            Icon(Icons.Default.FolderIcon, contentDescription = null)
-                            Spacer(Modifier.width(6.dp))
-                            Text(if (isMoving) "移动中…" else "移动到轮播文件夹")
-                        }
+                    Column {
                         OutlinedButton(
-                            onClick = { selectedPaths.clear() },
-                            enabled = !isMoving,
-                            modifier = Modifier.weight(0.8f),
+                            onClick = { unmarkItems(images.filter { it.path in selectedPaths }) },
+                            enabled = !isBusy,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                             shape = RoundedCornerShape(16.dp)
                         ) {
-                            Text("取消选择")
+                            Text(if (isUnmarking) "取消标记中…" else "取消标记")
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Button(
+                                onClick = {
+                                    requestMove(images.filter { it.path in selectedPaths })
+                                },
+                                enabled = !isBusy,
+                                modifier = Modifier.weight(1.4f),
+                                shape = RoundedCornerShape(16.dp)
+                            ) {
+                                Icon(Icons.Default.FolderIcon, contentDescription = null)
+                                Spacer(Modifier.width(6.dp))
+                                Text(if (isMoving) "移动中…" else "移动到轮播文件夹")
+                            }
+                            OutlinedButton(
+                                onClick = { selectedPaths.clear() },
+                                enabled = !isBusy,
+                                modifier = Modifier.weight(0.8f),
+                                shape = RoundedCornerShape(16.dp)
+                            ) {
+                                Text("取消选择")
+                            }
                         }
                     }
                 }
@@ -412,7 +451,7 @@ private fun MarkedScreeningContent() {
             if (images.isEmpty()) {
                 ScreeningEmptyState(
                     title = "暂无已标记图片",
-                    description = "在轮播中标记图片后会显示在这里，可移动到其他轮播文件夹"
+                    description = "在轮播中标记图片后会显示在这里，可取消标记或移动到其他轮播文件夹"
                 )
             } else {
                 LazyVerticalGrid(
@@ -919,6 +958,7 @@ private fun ScreeningPreview(
     onBack: () -> Unit,
     onDelete: (Wallpaper) -> Unit,
     onMove: (Wallpaper) -> Unit,
+    onUnmark: ((Wallpaper) -> Unit)? = null,
     isBusy: Boolean = false,
     onIndexChanged: (Int) -> Unit = {}
 ) {
@@ -1009,30 +1049,42 @@ private fun ScreeningPreview(
             color = Color.Black.copy(alpha = 0.52f),
             shape = RoundedCornerShape(18.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Button(
-                    onClick = { onMove(currentItem) },
-                    enabled = !isBusy,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(Icons.Default.FolderIcon, contentDescription = null)
-                    Spacer(Modifier.width(4.dp))
-                    Text("移动到")
+            Column(Modifier.fillMaxWidth().padding(8.dp)) {
+                onUnmark?.let { unmark ->
+                    OutlinedButton(
+                        onClick = { unmark(currentItem) },
+                        enabled = !isBusy,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("取消标记", color = modeTextColor)
+                    }
+                    Spacer(Modifier.height(8.dp))
                 }
-                OutlinedButton(
-                    onClick = {
-                        pendingDelete = currentItem
-                    },
-                    enabled = !isBusy,
-                    modifier = Modifier.weight(1f)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.Delete, contentDescription = null, tint = modeTextColor)
-                    Spacer(Modifier.width(4.dp))
-                    Text("删除", color = modeTextColor)
+                    Button(
+                        onClick = { onMove(currentItem) },
+                        enabled = !isBusy,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.FolderIcon, contentDescription = null)
+                        Spacer(Modifier.width(4.dp))
+                        Text("移动到")
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            pendingDelete = currentItem
+                        },
+                        enabled = !isBusy,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = null, tint = modeTextColor)
+                        Spacer(Modifier.width(4.dp))
+                        Text("删除", color = modeTextColor)
+                    }
                 }
             }
         }
