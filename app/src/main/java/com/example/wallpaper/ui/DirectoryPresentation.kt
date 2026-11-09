@@ -200,24 +200,8 @@ internal fun isWallpaperInDirectory(context: Context, rawPath: String, rawDirect
     val imageUri = runCatching { Uri.parse(rawPath) }.getOrNull() ?: return false
     val directoryUri = runCatching { Uri.parse(rawDirectory) }.getOrNull() ?: return false
 
-    fun localFile(rawValue: String, uri: Uri): File? {
-        filePathOf(rawValue, uri)?.let { return File(it) }
-        // Only Android's external-storage provider has this known filesystem mapping.
-        if (uri.authority != "com.android.externalstorage.documents") return null
-        val documentId = runCatching {
-            if (DocumentsContract.isDocumentUri(context, uri)) {
-                DocumentsContract.getDocumentId(uri)
-            } else {
-                DocumentsContract.getTreeDocumentId(uri)
-            }
-        }.getOrNull() ?: return null
-        val parts = documentId.split(':', limit = 2)
-        if (parts.size != 2 || parts[0] != "primary") return null
-        return File(Environment.getExternalStorageDirectory(), parts[1])
-    }
-
-    val imageFile = localFile(rawPath, imageUri)
-    val directoryFile = localFile(rawDirectory, directoryUri)
+    val imageFile = storageFileOf(context, rawPath, imageUri)
+    val directoryFile = storageFileOf(context, rawDirectory, directoryUri)
     if (imageFile != null && directoryFile != null) {
         return runCatching {
             val directoryPath = directoryFile.canonicalPath.trimEnd(File.separatorChar)
@@ -362,7 +346,9 @@ internal fun moveWallpaperToDirectoryWithResult(
         if (!targetDirectory.exists() || !targetDirectory.isDirectory) return null
 
         val existingTarget = targetDirectory.findFile(sourceName)
-        if (existingTarget?.uri == sourceUri) return sourcePath
+        if (existingTarget != null && isSameStorageFile(context, sourceUri, existingTarget.uri)) {
+            return sourcePath
+        }
         val targetFile = existingTarget
             ?: targetDirectory.createFile("image/*", sourceName)
             ?: return null
@@ -389,11 +375,9 @@ internal fun moveWallpaperToDirectoryWithResult(
     val targetDirectory = File(targetDirectoryPath)
     if (!targetDirectory.isDirectory) return null
     val destination = File(targetDirectory, sourceName)
+    if (isSameStorageFile(context, sourceUri, Uri.fromFile(destination))) return sourcePath
 
     if (sourceFile != null && sourceFile.exists()) {
-        if (runCatching { sourceFile.canonicalFile == destination.canonicalFile }.getOrDefault(false)) {
-            return sourcePath
-        }
         return if (sourceFile.renameTo(destination)) Uri.fromFile(destination).toString() else null
     }
 
@@ -412,6 +396,37 @@ internal fun moveWallpaperToDirectoryWithResult(
     val deleted = sourceDocumentFile.delete()
     if (!deleted) destination.delete()
     return if (deleted) Uri.fromFile(destination).toString() else null
+}
+
+private fun isSameStorageFile(context: Context, first: Uri, second: Uri): Boolean {
+    if (first == second) return true
+    val firstFile = storageFileOf(context, first.toString(), first)
+    val secondFile = storageFileOf(context, second.toString(), second)
+    if (firstFile != null && secondFile != null) {
+        return runCatching { firstFile.canonicalFile == secondFile.canonicalFile }.getOrDefault(false)
+    }
+    if (first.scheme != ContentResolver.SCHEME_CONTENT ||
+        second.scheme != ContentResolver.SCHEME_CONTENT || first.authority != second.authority
+    ) return false
+    return runCatching {
+        DocumentsContract.getDocumentId(first) == DocumentsContract.getDocumentId(second)
+    }.getOrDefault(false)
+}
+
+private fun storageFileOf(context: Context, rawValue: String, uri: Uri): File? {
+    filePathOf(rawValue, uri)?.let { return File(it) }
+    // Only Android's external-storage provider has this known filesystem mapping.
+    if (uri.authority != "com.android.externalstorage.documents") return null
+    val documentId = runCatching {
+        if (DocumentsContract.isDocumentUri(context, uri)) {
+            DocumentsContract.getDocumentId(uri)
+        } else {
+            DocumentsContract.getTreeDocumentId(uri)
+        }
+    }.getOrNull() ?: return null
+    val parts = documentId.split(':', limit = 2)
+    if (parts.size != 2 || parts[0] != "primary") return null
+    return File(Environment.getExternalStorageDirectory(), parts[1])
 }
 
 private fun filePathOf(rawValue: String, uri: Uri?): String? {

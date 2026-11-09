@@ -157,12 +157,20 @@ private fun MarkedScreeningContent() {
         isMoving = true
         scope.launch(Dispatchers.IO) {
             var movedCount = 0
+            var restoredCount = 0
             try {
                 pathsToMove.forEach { wallpaper ->
                     val movedPath = runCatching {
                         moveWallpaperToDirectoryWithResult(context, wallpaper.path, targetFolder.uri)
                     }.getOrNull()
                     if (movedPath != null) {
+                        if (movedPath == wallpaper.path) {
+                            // 原目录无需移动文件，沿用恢复（取消标记）的处理。
+                            dao.unmarkWallpapers(listOf(wallpaper.path))
+                            movedCount++
+                            restoredCount++
+                            return@forEach
+                        }
                         dao.deleteWallpaperByPath(wallpaper.path)
                         val existingTarget = dao.getWallpaperByPath(movedPath)
                         if (existingTarget == null) {
@@ -191,10 +199,13 @@ private fun MarkedScreeningContent() {
                 withContext(Dispatchers.Main) {
                     selectedPaths.clear()
                     isMoving = false
-                    val message = if (movedCount == pathsToMove.size) {
-                        "已移动 $movedCount 张图片到「${targetFolder.name}」"
-                    } else {
-                        "已移动 $movedCount/${pathsToMove.size} 张图片，请检查目标文件夹权限"
+                    val message = when {
+                        movedCount != pathsToMove.size ->
+                            "已处理 $movedCount/${pathsToMove.size} 张图片，请检查目标文件夹权限"
+                        restoredCount == movedCount -> "已取消 $restoredCount 张图片的标记"
+                        restoredCount > 0 ->
+                            "已移动 ${movedCount - restoredCount} 张图片，另有 $restoredCount 张原目录图片已取消标记"
+                        else -> "已移动 $movedCount 张图片到「${targetFolder.name}」"
                     }
                     android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
                 }
